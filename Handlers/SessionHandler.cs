@@ -15,7 +15,7 @@ public class SessionHandler(
     Action render,
     Action resetPaneCache)
 {
-    public void Create(bool claudeAvailable)
+    public void Create(bool claudeAvailable, string? preSelectRemote = null)
     {
         if (!claudeAvailable)
         {
@@ -27,13 +27,30 @@ public class SessionHandler(
         {
             var hasRemotes = config.RemoteHosts.Count > 0;
             var globalSkip = config.DangerouslySkipPermissions;
-            var totalSteps = (hasRemotes ? 1 : 0) + 4 + (globalSkip ? 0 : 1);
+            var totalSteps = (hasRemotes && preSelectRemote == null ? 1 : 0) + 4 + (globalSkip ? 0 : 1);
             var step = 0;
 
             // Step: Target (only if remote hosts configured)
             RemoteHost? remoteHost = null;
             var sshVerified = false;
-            if (hasRemotes)
+            if (preSelectRemote != null)
+            {
+                remoteHost = config.RemoteHosts.FirstOrDefault(h => h.Name == preSelectRemote);
+                if (remoteHost != null)
+                {
+                    AnsiConsole.Status()
+                        .Spinner(Spinner.Known.Dots)
+                        .SpinnerStyle(new Style(Color.Grey70))
+                        .Start($"[grey70]Checking connection to [white]{remoteHost.Name}[/]...[/]", _ =>
+                        {
+                            sshVerified = SshService.CheckConnectivity(remoteHost.Host);
+                        });
+
+                    if (!sshVerified)
+                        AnsiConsole.MarkupLine($"[yellow]⚠ Could not verify connection to {Markup.Escape(remoteHost.Name)} — continuing anyway[/]");
+                }
+            }
+            else if (hasRemotes)
             {
                 FlowHelper.PrintStep(++step, totalSteps, "Target");
                 remoteHost = flow.PickTarget();
