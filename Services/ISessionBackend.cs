@@ -29,6 +29,12 @@ public interface ISessionBackend : IDisposable
     // Remote session discovery
     List<Session> GetUntrackedRemoteSessions() => [];
 
+    // Grid mode — native tmux split panes
+    string? CreateGridSession(List<string> sessionNames) => "Grid not supported";
+    void RestoreFromGrid() { }
+    bool GridSessionExists() => false;
+    List<string>? GetGridSessionManifest() => null;
+
     // Environment checks
     bool IsAvailable();
     bool IsInsideHost();

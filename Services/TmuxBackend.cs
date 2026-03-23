@@ -253,6 +253,118 @@ public class TmuxBackend : ISessionBackend
 
     public bool HasClaude() => SessionContentAnalyzer.CheckClaudeAvailable();
 
+    public string? CreateGridSession(List<string> sessionNames)
+    {
+        // Clean up any leftover grid session from a previous crash
+        if (GridSessionExists())
+            RestoreFromGrid();
+
+        // Create the grid session with a throwaway shell
+        var (createOk, createErr) = RunTmuxWithError("new-session", "-d", "-s", "ccc-grid");
+        if (!createOk)
+            return createErr ?? "Failed to create grid session";
+
+        // Store the session manifest for crash recovery
+        RunTmux("set-environment", "-t", "ccc-grid", "CCC_GRID_SESSIONS",
+            string.Join(",", sessionNames));
+
+        // Record the initial empty pane's ID so we can kill it after joining session panes
+        var initialPaneId = RunTmux("display-message", "-t", "ccc-grid:0", "-p", "#{pane_id}");
+
+        // Move each session's pane into the grid window.
+        // join-pane moves the pane, leaving the source session empty (tmux auto-kills it).
+        foreach (var name in sessionNames)
+        {
+            RunTmux("join-pane", "-d", "-s", $"{name}:0.0", "-t", "ccc-grid:0");
+        }
+
+        // Kill the initial empty pane that was created with new-session
+        if (initialPaneId != null)
+            RunTmux("kill-pane", "-t", initialPaneId);
+
+        // Apply tiled layout
+        RunTmux("select-layout", "-t", "ccc-grid:0", "tiled");
+
+        // Bind Ctrl+G to detach from the grid session
+        RunTmux("bind-key", "-T", "root", "C-g", "detach-client");
+
+        return null;
+    }
+
+    public void RestoreFromGrid()
+    {
+        if (!GridSessionExists())
+            return;
+
+        var manifest = GetGridSessionManifest();
+
+        // List remaining panes in the grid window
+        var paneOutput = RunTmux("list-panes", "-t", "ccc-grid:0", "-F", "#{pane_id}\t#{pane_dead}");
+
+        if (paneOutput != null && manifest != null)
+        {
+            var paneLines = paneOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var sessionIndex = 0;
+
+            foreach (var line in paneLines)
+            {
+                var parts = line.Split('\t');
+                if (parts.Length < 2)
+                    continue;
+
+                var paneId = parts[0];
+                var isDead = parts[1] == "1";
+
+                if (isDead || sessionIndex >= manifest.Count)
+                {
+                    sessionIndex++;
+                    continue;
+                }
+
+                var originalSession = manifest[sessionIndex];
+
+                // break-pane without -t creates a new session from this pane.
+                // The original session was destroyed when join-pane moved its only pane out.
+                RunTmux("break-pane", "-d", "-s", paneId);
+
+                // break-pane creates a session with an auto-generated name.
+                // The pane ends up in the newest session. Find it by pane ID.
+                var newSession = RunTmux("display-message", "-t", paneId, "-p", "#{session_name}");
+                if (newSession != null && newSession != originalSession)
+                    RunTmux("rename-session", "-t", newSession, originalSession);
+
+                sessionIndex++;
+            }
+        }
+
+        // Unbind Ctrl+G — bind-key is server-wide, not session-scoped
+        RunTmux("unbind-key", "-T", "root", "C-g");
+
+        // Kill the grid session (cleans up dead panes)
+        RunTmux("kill-session", "-t", "ccc-grid");
+    }
+
+    public bool GridSessionExists()
+    {
+        var result = RunTmux("has-session", "-t", "ccc-grid");
+        return result != null;
+    }
+
+    public List<string>? GetGridSessionManifest()
+    {
+        var output = RunTmux("show-environment", "-t", "ccc-grid", "CCC_GRID_SESSIONS");
+        if (output == null)
+            return null;
+
+        // Output format: "CCC_GRID_SESSIONS=session1,session2,session3"
+        var eqIdx = output.IndexOf('=');
+        if (eqIdx < 0)
+            return null;
+
+        var value = output[(eqIdx + 1)..];
+        return value.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+    }
+
     public void Dispose()
     {
         // No-op — tmux sessions persist independently of CCC
