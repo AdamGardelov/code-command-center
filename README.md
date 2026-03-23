@@ -28,6 +28,7 @@ A terminal UI for managing multiple Claude Code sessions. Run dozens of Claude a
 - **Git diff view** — see what changed since a session started, with full colorized scrollable diff overlay
 - **PR review** — pick a repo, pick a PR, get a review worktree with Claude pre-loaded with a review prompt
 - **Notifications** — terminal bell, OSC, and desktop notifications when sessions go idle
+- **Machine grouping** — sessions are grouped by host (Local, remote machines) with collapsible headers showing session counts
 - **Remote sessions** — run Claude on remote machines via SSH, managed from your local dashboard
 - **Cross-platform** — tmux on Linux/macOS (sessions persist)
 - **Mobile mode** — single-column layout for SSH from your phone
@@ -140,7 +141,7 @@ a manifest stored in a tmux environment variable.
 | Key                | Action                                                           |
 |--------------------|------------------------------------------------------------------|
 | `j` / `k` / arrows | Navigate sessions                                                |
-| `Enter`            | Attach to session / open worktree group session                  |
+| `Enter`            | Attach to session / open worktree group session / toggle expand on machine header |
 | `Space`            | Toggle expand/collapse group                                     |
 | `Ctrl+G`           | Toggle grid view (group grid when on a grouped session)          |
 | `D`                | Toggle git diff mode (summary in preview, `Enter` for full diff) |
@@ -310,6 +311,22 @@ automatically uses the correct config:
     "defaultClaudeConfigDir": "~/.claude-work"
 }
 ```
+
+### Machine Grouping
+
+The session list groups sessions by host. Each group is preceded by a collapsible machine header:
+
+```
+▼ Local (5)
+  my-project
+  another-session
+▶ MY-SERVER (2)
+```
+
+- The header shows an expand/collapse icon (`▼` / `▶`), the machine name, and the session count.
+- Press `Enter` on a machine header to toggle it open or closed.
+- Pressing `n` (new session) while a machine header is selected pre-selects that host in the "Where to run?" step.
+- Individual sessions no longer show a separate cloud icon — the machine header provides the host context.
 
 #### Remote Hosts
 
