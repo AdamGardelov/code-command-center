@@ -135,9 +135,7 @@ public static class Renderer
         var indent = indented ? "      " : "   ";
         var rawName = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
-        var remoteIcon = "";
         var skipIcon = session.SkipPermissions ? "[yellow]⚡[/]" : "";
-        var flags = $"{remoteIcon}{skipIcon}";
         var nameWidth = indented ? 16 : 19;
         var name = rawName.PadRight(nameWidth);
 
@@ -156,17 +154,17 @@ public static class Renderer
             if (session.IsExcluded)
             {
                 if (isSelected)
-                    return new Markup($"[grey50 on grey19]{indent} [grey42]†[/] {name}[/]{flags}");
-                return new Markup($"{indent} [grey42]†[/] [grey35]{name}[/]{flags}");
+                    return new Markup($"[grey50 on grey19]{indent} [grey42]†[/] {name}[/]{skipIcon}");
+                return new Markup($"{indent} [grey42]†[/] [grey35]{name}[/]{skipIcon}");
             }
 
             if (isSelected)
             {
                 var bg = session.ColorTag ?? "grey37";
-                return new Markup($"[white on {bg}]{indent} † {name}[/]{flags}");
+                return new Markup($"[white on {bg}]{indent} † {name}[/]{skipIcon}");
             }
 
-            return new Markup($"{indent} [red]†[/] [grey50]{name}[/]{flags}");
+            return new Markup($"{indent} [red]†[/] [grey50]{name}[/]{skipIcon}");
         }
 
         var status = session.IsWaitingForInput ? "!" : session.IsIdle ? "✓" : spinner;
@@ -175,22 +173,22 @@ public static class Renderer
         {
             var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : session.IsIdle ? "[grey42]✓[/]" : $"[grey35]{spinner}[/]";
             if (isSelected)
-                return new Markup($"[grey50 on grey19]{indent} {excludedStatus} {name}[/]{flags}");
-            return new Markup($"{indent} {excludedStatus} [grey35]{name}[/]{flags}");
+                return new Markup($"[grey50 on grey19]{indent} {excludedStatus} {name}[/]{skipIcon}");
+            return new Markup($"{indent} {excludedStatus} [grey35]{name}[/]{skipIcon}");
         }
 
         if (isSelected)
         {
             var bg = session.ColorTag ?? "grey37";
-            return new Markup($"[white on {bg}]{indent} {status} {name}[/]{flags}");
+            return new Markup($"[white on {bg}]{indent} {status} {name}[/]{skipIcon}");
         }
 
         if (session.IsWaitingForInput)
-            return new Markup($"{indent} [yellow bold]![/] [navajowhite1]{name}[/]{flags}");
+            return new Markup($"{indent} [yellow bold]![/] [navajowhite1]{name}[/]{skipIcon}");
         if (session.IsIdle)
-            return new Markup($"{indent} [grey50]✓[/] [navajowhite1]{name}[/]{flags}");
+            return new Markup($"{indent} [grey50]✓[/] [navajowhite1]{name}[/]{skipIcon}");
 
-        return new Markup($"{indent} [green]{spinner}[/] [navajowhite1]{name}[/]{flags}");
+        return new Markup($"{indent} [green]{spinner}[/] [navajowhite1]{name}[/]{skipIcon}");
     }
 
     private static Markup BuildRepoRow(TreeItem.RepoItem repo, bool isSelected)
