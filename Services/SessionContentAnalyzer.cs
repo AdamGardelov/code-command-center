@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 namespace CodeCommandCenter.Services;
 
 /// <summary>
-/// Shared content analysis logic used by both TmuxBackend and ConPtyBackend
+/// Shared content analysis logic used by TmuxBackend
 /// for detecting idle prompts and status bar boundaries.
 /// </summary>
 internal static partial class SessionContentAnalyzer

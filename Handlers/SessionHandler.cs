@@ -311,7 +311,7 @@ public class SessionHandler(
             return;
         }
 
-        // Exit CCC's alternate screen so the ConPTY session renders to normal screen
+        // Exit CCC's alternate screen so tmux attach renders to normal screen
         Console.Write("\e[?1049l"); // Leave alternate screen
         Console.Write("\e(B");      // Reset charset — previous remote session may have corrupted it
         Console.Write("\e[0m");     // Reset all attributes
