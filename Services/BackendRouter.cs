@@ -223,7 +223,7 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
 
     public bool GridSessionExists() => local.GridSessionExists();
 
-    public List<string>? GetGridSessionManifest() => local.GetGridSessionManifest();
+    public Dictionary<string, string>? GetGridSessionManifest() => local.GetGridSessionManifest();
 
     public bool IsAvailable() => local.IsAvailable();
     public bool IsInsideHost() => local.IsInsideHost();

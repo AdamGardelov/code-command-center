@@ -264,23 +264,31 @@ public class TmuxBackend : ISessionBackend
         if (!createOk)
             return createErr ?? "Failed to create grid session";
 
-        // Store the session manifest for crash recovery
-        RunTmux("set-environment", "-t", "ccc-grid", "CCC_GRID_SESSIONS",
-            string.Join(",", sessionNames));
-
         // Record the initial empty pane's ID so we can kill it after joining session panes
         var initialPaneId = RunTmux("display-message", "-t", "ccc-grid:0", "-p", "#{pane_id}");
 
         // Move each session's pane into the grid window.
+        // Track each pane's ID immediately after joining to build a reliable
+        // paneId→sessionName mapping (independent of list-panes ordering).
         // join-pane moves the pane, leaving the source session empty (tmux auto-kills it).
+        var paneMapping = new List<string>();
         foreach (var name in sessionNames)
         {
+            // Capture the source pane's ID before joining (it keeps its ID after the move)
+            var sourcePaneId = RunTmux("display-message", "-t", $"{name}:0.0", "-p", "#{pane_id}");
             RunTmux("join-pane", "-d", "-s", $"{name}:0.0", "-t", "ccc-grid:0");
+            if (sourcePaneId != null)
+                paneMapping.Add($"{sourcePaneId}={name}");
         }
 
         // Kill the initial empty pane that was created with new-session
         if (initialPaneId != null)
             RunTmux("kill-pane", "-t", initialPaneId);
+
+        // Store the pane ID → session name manifest for crash recovery.
+        // Format: "%5=session1,%3=session2" — order-independent.
+        RunTmux("set-environment", "-t", "ccc-grid", "CCC_GRID_SESSIONS",
+            string.Join(",", paneMapping));
 
         // Apply layout: side-by-side for 2 panes, tiled grid for 3+
         var layout = sessionNames.Count == 2 ? "even-horizontal" : "tiled";
@@ -305,7 +313,6 @@ public class TmuxBackend : ISessionBackend
         if (paneOutput != null && manifest != null)
         {
             var paneLines = paneOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            var sessionIndex = 0;
 
             foreach (var line in paneLines)
             {
@@ -316,25 +323,21 @@ public class TmuxBackend : ISessionBackend
                 var paneId = parts[0];
                 var isDead = parts[1] == "1";
 
-                if (isDead || sessionIndex >= manifest.Count)
-                {
-                    sessionIndex++;
+                if (isDead)
                     continue;
-                }
 
-                var originalSession = manifest[sessionIndex];
+                // Look up the original session name by pane ID (order-independent)
+                if (!manifest.TryGetValue(paneId, out var originalSession))
+                    continue;
 
                 // The original session was destroyed when join-pane moved its only pane out.
                 // Reverse the process: create a new empty session, move the pane into it,
                 // then kill the placeholder pane.
-                // (break-pane only creates new windows, NOT new sessions)
                 RunTmux("new-session", "-d", "-s", originalSession);
                 var placeholderPaneId = RunTmux("display-message", "-t", $"{originalSession}:0", "-p", "#{pane_id}");
                 RunTmux("join-pane", "-d", "-s", paneId, "-t", $"{originalSession}:0");
                 if (placeholderPaneId != null)
                     RunTmux("kill-pane", "-t", placeholderPaneId);
-
-                sessionIndex++;
             }
         }
 
@@ -351,19 +354,27 @@ public class TmuxBackend : ISessionBackend
         return result != null;
     }
 
-    public List<string>? GetGridSessionManifest()
+    public Dictionary<string, string>? GetGridSessionManifest()
     {
         var output = RunTmux("show-environment", "-t", "ccc-grid", "CCC_GRID_SESSIONS");
         if (output == null)
             return null;
 
-        // Output format: "CCC_GRID_SESSIONS=session1,session2,session3"
+        // Output format: "CCC_GRID_SESSIONS=%5=session1,%3=session2"
         var eqIdx = output.IndexOf('=');
         if (eqIdx < 0)
             return null;
 
         var value = output[(eqIdx + 1)..];
-        return value.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+        var result = new Dictionary<string, string>();
+        foreach (var entry in value.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var sep = entry.IndexOf('=');
+            if (sep > 0)
+                result[entry[..sep]] = entry[(sep + 1)..];
+        }
+
+        return result;
     }
 
     public void Dispose()

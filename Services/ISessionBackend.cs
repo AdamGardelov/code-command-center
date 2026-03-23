@@ -33,7 +33,7 @@ public interface ISessionBackend : IDisposable
     string? CreateGridSession(List<string> sessionNames) => "Grid not supported";
     void RestoreFromGrid() { }
     bool GridSessionExists() => false;
-    List<string>? GetGridSessionManifest() => null;
+    Dictionary<string, string>? GetGridSessionManifest() => null;
 
     // Environment checks
     bool IsAvailable();
