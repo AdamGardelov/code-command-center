@@ -15,7 +15,7 @@ No test project exists. Verify changes by building and manual testing.
 ## Architecture
 
 **Code Command Center (ccc)** is a terminal dashboard for managing multiple Claude Code sessions. Single .NET 10
-executable, single dependency (Spectre.Console). Uses tmux on Linux/macOS, native ConPTY on Windows.
+executable, single dependency (Spectre.Console). Uses tmux on Linux/macOS.
 
 ### Core Loop
 
@@ -52,12 +52,11 @@ cross-cutting concerns (reload sessions, render, reset caches).
 
 ### Session Backend
 
-`ISessionBackend` abstracts all session lifecycle operations. Platform auto-selects at startup:
+`ISessionBackend` abstracts all session lifecycle operations.
 
 | Backend        | Platform      | Session persistence                        |
 |----------------|---------------|--------------------------------------------|
 | `TmuxBackend`  | Linux / macOS | Persistent (tmux server survives CCC exit) |
-| `ConPtyBackend`| Windows       | Ephemeral (sessions die with CCC)          |
 
 ### Services (all static)
 
@@ -66,7 +65,6 @@ cross-cutting concerns (reload sessions, render, reset caches).
 | `ConfigService`     | JSON persistence to `~/.ccc/config.json`. Handles session metadata, groups, keybindings                |
 | `KeyBindingService` | Resolves keybindings from defaults + config overrides. Builds key→action map                           |
 | `GitService`        | `git worktree add`, `IsGitRepo`, `FetchPrune`, `DetectGitInfo`, branch name sanitization               |
-| `RingBuffer`        | Thread-safe circular buffer for ConPTY terminal output capture                                         |
 | `UpdateChecker`     | Async GitHub API check for newer releases                                                              |
 | `CrashLog`          | Exception logging to `~/.ccc/crash.log` with auto-trim                                                 |
 
@@ -107,8 +105,9 @@ named `{groupName}-{repoName}`.
 **Waiting-for-input detection**: Hash pane content (excluding status bar), track consecutive stable polls. After
 threshold, mark session idle with `!` indicator.
 
-**Grid view**: Auto-scales 1x1 to 3x3 (max 9 sessions). Resizes tmux panes to match grid cell width before capture to
-prevent line-wrap artifacts.
+**Grid view**: Ctrl+G creates a temporary `ccc-grid` tmux session using `join-pane` to move session panes
+into a tiled layout. User interacts with real tmux panes. On exit (Ctrl+G or detach), panes are restored
+to their original sessions. Max 6 sessions. Crash recovery via tmux environment variable manifest.
 
 **Worktree creation**: `PickDirectory` shows `⑂` entries for git repo favorites. Creates worktrees at
 `worktreeBasePath/{branchName}/{repoName}/`. Group flow generates `.feature-context.json` for later discovery.
