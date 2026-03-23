@@ -55,14 +55,16 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
                 {
                     // Mid-session offline: transient — show cached sessions greyed out
                     var cached = config.CachedRemoteSessions.GetValueOrDefault(hostName) ?? [];
-                    var offlineSessions = cached.Select(c => new Session
-                    {
-                        Name = c.Name,
-                        CurrentPath = c.Path,
-                        Created = c.Created,
-                        RemoteHostName = hostName,
-                        IsOffline = true,
-                    }).ToList();
+                    var offlineSessions = cached
+                        .Where(c => tracked.TryGetValue(c.Name, out var h) && h == hostName)
+                        .Select(c => new Session
+                        {
+                            Name = c.Name,
+                            CurrentPath = c.Path,
+                            Created = c.Created,
+                            RemoteHostName = hostName,
+                            IsOffline = true,
+                        }).ToList();
                     all.AddRange(offlineSessions);
                 }
             }
