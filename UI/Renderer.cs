@@ -89,6 +89,18 @@ public static class Renderer
                     case TreeItem.RepoItem ri:
                         rows.Add(BuildRepoRow(ri, isSelected));
                         break;
+                    case TreeItem.MachineHeader mh:
+                        // Count sessions under this machine
+                        var machineSessionCount = 0;
+                        for (var j = i + 1; j < treeItems.Count; j++)
+                        {
+                            if (treeItems[j] is TreeItem.MachineHeader)
+                                break;
+                            if (treeItems[j] is TreeItem.SessionItem)
+                                machineSessionCount++;
+                        }
+                        rows.Add(BuildMachineHeaderRow(mh, isSelected, machineSessionCount));
+                        break;
                 }
             }
         }
@@ -107,6 +119,8 @@ public static class Renderer
                 ? Style.Parse(riGroup.Color).Foreground
                 : Color.Grey42;
         }
+        else if (selectedItem is TreeItem.MachineHeader)
+            borderColor = Color.Grey42;
         else
             borderColor = Color.Grey42;
 
@@ -118,23 +132,20 @@ public static class Renderer
 
     private static Markup BuildSessionRow(Session session, bool isSelected, bool indented = false)
     {
-        var indent = indented ? "   " : "";
+        var indent = indented ? "      " : "   ";
         var rawName = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
-        var remoteIcon = session.RemoteHostName != null ? "[mediumpurple3]☁[/]" : "";
+        var remoteIcon = "";
         var skipIcon = session.SkipPermissions ? "[yellow]⚡[/]" : "";
         var flags = $"{remoteIcon}{skipIcon}";
-        var nameWidth = indented ? 19 : 22;
+        var nameWidth = indented ? 16 : 19;
         var name = rawName.PadRight(nameWidth);
 
         if (session.IsOffline)
         {
-            var prefix = indented ? "  " : "";
+            var prefix = indented ? "     " : "  ";
             var escapedName = Markup.Escape(session.Name);
-            var hostInfo = session.RemoteHostName != null
-                ? $" [grey35]({Markup.Escape(session.RemoteHostName)})[/]"
-                : "";
-            var row = $"[grey35]{prefix}✗ {escapedName}[/]{hostInfo}{skipIcon}";
+            var row = $"[grey35]{prefix}✗ {escapedName}[/]{skipIcon}";
             return isSelected
                 ? new Markup($"[on grey15]{row}[/]")
                 : new Markup(row);
@@ -186,8 +197,26 @@ public static class Renderer
     {
         var name = Markup.Escape(repo.RepoName).PadRight(19);
         if (isSelected)
-            return new Markup($"[grey70 on grey19]    ○ {name}[/]");
-        return new Markup($"    [grey42]○[/] [grey50]{name}[/]");
+            return new Markup($"[grey70 on grey19]       ○ {name}[/]");
+        return new Markup($"       [grey42]○[/] [grey50]{name}[/]");
+    }
+
+    private static Markup BuildMachineHeaderRow(TreeItem.MachineHeader mh, bool isSelected, int sessionCount)
+    {
+        var expandIcon = mh.IsExpanded ? "\u25bc" : "\u25b6";
+        var name = Markup.Escape(mh.HostName);
+        var countLabel = $"({sessionCount})";
+
+        if (mh.IsOffline)
+        {
+            var row = $"[grey35]{expandIcon} {name} {countLabel} [italic]offline[/][/]";
+            return isSelected ? new Markup($"[on grey15]{row}[/]") : new Markup(row);
+        }
+
+        if (isSelected)
+            return new Markup($"[grey70 on grey19]{expandIcon} {name} {countLabel}[/]");
+
+        return new Markup($"[grey50]{expandIcon} {name} {countLabel}[/]");
     }
 
     private static Markup BuildTreeGroupRow(TreeItem.GroupHeader header, bool isSelected, AppState state)
@@ -217,11 +246,11 @@ public static class Renderer
                 not null => spinner,
                 _ => " ",
             };
-            return new Markup($"[white on {bg}] {status} {expandIcon} {name,-12} {countLabel,-4} [/]");
+            return new Markup($"[white on {bg}]    {status} {expandIcon} {name,-12} {countLabel,-4} [/]");
         }
 
         if (liveCount == 0 && group.Repos.Count == 0 && !hasRootSession)
-            return new Markup($"   [grey50]{expandIcon}[/] [grey50 strikethrough]{name,-12}[/] [grey42]{countLabel}[/]");
+            return new Markup($"      [grey50]{expandIcon}[/] [grey50 strikethrough]{name,-12}[/] [grey42]{countLabel}[/]");
 
         var statusIcon = rootSession switch
         {
@@ -230,7 +259,7 @@ public static class Renderer
             not null => $"[green]{spinner}[/]",
             _ => " ",
         };
-        return new Markup($" {statusIcon} [{colorTag}]{expandIcon}[/] [{colorTag}]{name,-12}[/] [grey50]{countLabel}[/]");
+        return new Markup($"    {statusIcon} [{colorTag}]{expandIcon}[/] [{colorTag}]{name,-12}[/] [grey50]{countLabel}[/]");
     }
 
     private static Panel BuildPreviewPanel(AppState state, string? capturedPane,
@@ -247,6 +276,21 @@ public static class Renderer
                 return BuildGroupPreviewPanel(gh.Group, state);
             if (currentItem is TreeItem.RepoItem ri)
                 return BuildRepoPreviewPanel(ri, state);
+            if (currentItem is TreeItem.MachineHeader mhPreview)
+            {
+                var machineCount = state.Sessions.Count(s =>
+                    (s.RemoteHostName ?? AppState.LocalMachineKey) ==
+                    (mhPreview.IsLocal ? AppState.LocalMachineKey : mhPreview.HostName));
+                var label = mhPreview.IsOffline ? "offline" : $"{machineCount} session(s)";
+                var previewText = mhPreview.IsLocal
+                    ? $"[grey50]Local machine — {label}[/]"
+                    : $"[grey50]{Markup.Escape(mhPreview.HostName)} — {label}[/]";
+
+                return new Panel(new Markup(previewText))
+                    .Header("[grey70] Machine [/]")
+                    .BorderColor(Color.Grey42)
+                    .Expand();
+            }
 
             // Panel width = terminal - session panel (35) - panel borders (4)
             var panelWidth = Math.Max(20, Console.WindowWidth - 35 - 4);
