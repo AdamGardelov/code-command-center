@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using CodeCommandCenter.Enums;
 using CodeCommandCenter.Models;
 using CodeCommandCenter.Services;
 using CodeCommandCenter.UI;
@@ -351,18 +350,7 @@ public class SessionHandler(
         ConfigService.ToggleExcluded(config, session.Name);
         session.IsExcluded = !session.IsExcluded;
 
-        if (state.ViewMode == ViewMode.Grid && session.IsExcluded)
-        {
-            // Session just got excluded from grid — clamp cursor
-            var gridSessions = state.GetGridSessions();
-            if (gridSessions.Count < 2)
-                // Not enough sessions for grid, switch to list
-                state.ViewMode = ViewMode.List;
-            else
-                state.CursorIndex = Math.Clamp(state.CursorIndex, 0, gridSessions.Count - 1);
-        }
-
-        var label = session.IsExcluded ? "Excluded from grid" : "Restored to grid";
+        var label = session.IsExcluded ? "Excluded" : "Restored";
         state.SetStatus(label);
         resetPaneCache();
     }
