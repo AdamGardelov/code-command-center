@@ -6,6 +6,7 @@ namespace CodeCommandCenter.UI;
 public class AppState
 {
     public List<Session> Sessions { get; set; } = [];
+    public CccConfig Config { get; set; } = new();
     public int CursorIndex { get; set; }
     public ViewMode ViewMode { get; set; } = ViewMode.List;
     public bool Running { get; set; } = true;
@@ -128,40 +129,103 @@ public class AppState
     {
         var items = new List<TreeItem>();
 
-        // Standalone sessions first
-        foreach (var session in GetStandaloneSessions())
-            items.Add(new TreeItem.SessionItem(session, null));
+        // Partition sessions by machine
+        var machineBuckets = new Dictionary<string, List<Session>>();
+        foreach (var session in Sessions)
+        {
+            var key = session.RemoteHostName ?? LocalMachineKey;
+            if (!machineBuckets.ContainsKey(key))
+                machineBuckets[key] = [];
+            machineBuckets[key].Add(session);
+        }
 
-        // Then groups with their sessions and repos
+        // Machine order: local first, then remotes in config order
+        var machineOrder = new List<string> { LocalMachineKey };
+        foreach (var host in Config.RemoteHosts)
+        {
+            machineOrder.Add(host.Name);
+            // Ensure bucket exists even if no sessions (shows empty machine header)
+            machineBuckets.TryAdd(host.Name, []);
+        }
+
+        // Pre-compute grouped session names
+        var groupedNames = new HashSet<string>(Groups.SelectMany(g => g.Sessions));
+
+        // Determine which machine each group belongs to
+        var groupMachine = new Dictionary<string, string>();
         foreach (var group in Groups)
         {
-            var isExpanded = ExpandedGroups.Contains(group.Name);
-            items.Add(new TreeItem.GroupHeader(group, isExpanded));
+            var liveRemotes = Sessions
+                .Where(s => group.Sessions.Contains(s.Name))
+                .Select(s => s.RemoteHostName ?? LocalMachineKey)
+                .Distinct()
+                .ToList();
 
-            if (isExpanded)
+            // Group belongs to a machine if ALL its live sessions are on that machine
+            // Zero live sessions → local (safe default)
+            groupMachine[group.Name] = liveRemotes.Count == 1 ? liveRemotes[0] : LocalMachineKey;
+        }
+
+        foreach (var machineKey in machineOrder)
+        {
+            if (!machineBuckets.TryGetValue(machineKey, out var machineSessions))
+                machineSessions = [];
+
+            var isLocal = machineKey == LocalMachineKey;
+            var isExpanded = MachineExpansion.GetValueOrDefault(machineKey, true);
+            var isOffline = MachineOnlineStatus.GetValueOrDefault(machineKey, false);
+
+            // Count includes all sessions under this machine (standalone + grouped)
+            items.Add(new TreeItem.MachineHeader(
+                isLocal ? "Local" : machineKey, isLocal, isExpanded, isOffline));
+
+            if (!isExpanded)
+                continue;
+
+            // Standalone sessions (not in any group), sorted
+            var standalone = machineSessions
+                .Where(s => !groupedNames.Contains(s.Name))
+                .OrderBy(s => s.IsExcluded)
+                .ThenBy(s => s.Created)
+                .ThenBy(s => s.Name)
+                .ToList();
+
+            foreach (var session in standalone)
+                items.Add(new TreeItem.SessionItem(session, null));
+
+            // Groups scoped to this machine
+            foreach (var group in Groups)
             {
-                var groupSessionNames = new HashSet<string>(group.Sessions);
-                var groupSessions = Sessions
-                    .Where(s => groupSessionNames.Contains(s.Name))
-                    .ToList();
+                if (groupMachine.GetValueOrDefault(group.Name) != machineKey)
+                    continue;
 
-                // Show live sessions (exclude the root session — it's accessed via the group header)
-                foreach (var session in groupSessions)
-                {
-                    if (session.Name == group.Name)
-                        continue;
-                    items.Add(new TreeItem.SessionItem(session, group.Name));
-                }
+                var groupIsExpanded = ExpandedGroups.Contains(group.Name);
+                items.Add(new TreeItem.GroupHeader(group, groupIsExpanded));
 
-                // Show repos that don't have a live session yet
-                if (group.Repos.Count > 0)
+                if (groupIsExpanded)
                 {
-                    var liveSessionNames = new HashSet<string>(groupSessions.Select(s => s.Name));
-                    foreach (var (repoName, repoPath) in group.Repos)
+                    var groupSessionNames = new HashSet<string>(group.Sessions);
+                    var groupSessions = Sessions
+                        .Where(s => groupSessionNames.Contains(s.Name))
+                        .ToList();
+
+                    foreach (var session in groupSessions)
                     {
-                        var expectedSessionName = $"{group.Name}-{repoName}";
-                        if (!liveSessionNames.Contains(expectedSessionName))
-                            items.Add(new TreeItem.RepoItem(repoName, repoPath, group.Name));
+                        if (session.Name == group.Name)
+                            continue;
+                        items.Add(new TreeItem.SessionItem(session, group.Name));
+                    }
+
+                    if (group.Repos.Count > 0)
+                    {
+                        var liveSessionNames = new HashSet<string>(
+                            groupSessions.Select(s => s.Name));
+                        foreach (var (repoName, repoPath) in group.Repos)
+                        {
+                            var expectedSessionName = $"{group.Name}-{repoName}";
+                            if (!liveSessionNames.Contains(expectedSessionName))
+                                items.Add(new TreeItem.RepoItem(repoName, repoPath, group.Name));
+                        }
                     }
                 }
             }

@@ -203,6 +203,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
                     // Apply results on the main thread
                     var sessions = ((Task<List<Session>>)_pendingSessionLoad).Result;
                     _state.Sessions = sessions;
+                    _state.Config = _config;
                     _state.HasUntrackedRemoteSessions = backend.GetUntrackedRemoteSessions().Count > 0;
                     if (backend is BackendRouter routerForStatus)
                         _state.MachineOnlineStatus = routerForStatus.GetRemoteOnlineStatus();
@@ -240,6 +241,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
     private void LoadSessions()
     {
         _state.Sessions = backend.ListSessions();
+        _state.Config = _config;
         _state.HasUntrackedRemoteSessions = backend.GetUntrackedRemoteSessions().Count > 0;
         if (backend is BackendRouter router)
             _state.MachineOnlineStatus = router.GetRemoteOnlineStatus();
