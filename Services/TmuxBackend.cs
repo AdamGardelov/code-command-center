@@ -291,7 +291,7 @@ public class TmuxBackend : ISessionBackend
             string.Join(",", paneMapping));
 
         // Apply layout: side-by-side for 2 panes, tiled grid for 3+
-        var layout = sessionNames.Count == 2 ? "even-horizontal" : "tiled";
+        var layout = sessionNames.Count <= 3 ? "even-horizontal" : "tiled";
         RunTmux("select-layout", "-t", "ccc-grid:0", layout);
 
         // Bind Ctrl+G to detach from the grid session
