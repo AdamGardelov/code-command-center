@@ -53,14 +53,6 @@ public class AppState
             return null;
         }
 
-        if (ViewMode == ViewMode.Grid)
-        {
-            var gridSessions = GetGridSessions();
-            if (CursorIndex >= 0 && CursorIndex < gridSessions.Count)
-                return gridSessions[CursorIndex];
-            return null;
-        }
-
         // List view: resolve from tree items
         var treeItems = GetTreeItems();
         if (CursorIndex >= 0 && CursorIndex < treeItems.Count)
@@ -239,52 +231,13 @@ public class AppState
     {
         _savedCursorIndex = CursorIndex;
         ActiveGroup = groupName;
-        ViewMode = ViewMode.Grid;
-        CursorIndex = 0;
     }
 
     public void LeaveGroupGrid()
     {
         ActiveGroup = null;
-        ViewMode = ViewMode.List;
         CursorIndex = _savedCursorIndex;
         ClampCursor();
-    }
-
-    /// <summary>
-    /// Returns (columns, rows) for the grid based on session count.
-    /// </summary>
-    public (int Cols, int Rows) GetGridDimensions()
-    {
-        var count = GetGridSessions().Count;
-        return count switch
-        {
-            0 => (1, 1),
-            1 => (1, 1),
-            2 => (2, 1),
-            3 or 4 => (2, 2),
-            5 or 6 => (3, 2),
-            7 or 8 or 9 => (3, 3),
-            _ => (0, 0), // Signals "too many for grid"
-        };
-    }
-
-    /// <summary>
-    /// Returns the number of pane output lines to show per grid cell,
-    /// calculated dynamically based on available terminal height.
-    /// </summary>
-    public int GetGridCellOutputLines()
-    {
-        var (_, gridRows) = GetGridDimensions();
-        if (gridRows == 0)
-            return 0;
-
-        var terminalHeight = Console.WindowHeight;
-        // Each row gets an equal share of: terminal height - app header (1) - status bar (1)
-        var rowHeight = (terminalHeight - 2) / gridRows;
-        // Subtract cell overhead: panel border (2) + name line (1) + path line (1) + rule (1)
-        var outputLines = rowHeight - 5;
-        return Math.Max(1, outputLines);
     }
 
     public void SetStatus(string message)
@@ -330,13 +283,6 @@ public class AppState
         {
             var mobile = GetMobileVisibleSessions();
             CursorIndex = mobile.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, mobile.Count - 1);
-            return;
-        }
-
-        if (ViewMode == ViewMode.Grid)
-        {
-            var grid = GetGridSessions();
-            CursorIndex = grid.Count == 0 ? 0 : Math.Clamp(CursorIndex, 0, grid.Count - 1);
             return;
         }
 

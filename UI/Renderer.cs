@@ -16,8 +16,7 @@ public static class Renderer
         return _spinnerFrames[index];
     }
 
-    public static IRenderable BuildLayout(AppState state, string? capturedPane,
-        Dictionary<string, string>? allCapturedPanes = null)
+    public static IRenderable BuildLayout(AppState state, string? capturedPane)
     {
         if (state.MobileMode)
             return BuildMobileLayout(state);
@@ -29,24 +28,6 @@ public static class Renderer
                 new Layout("StatusBar").Size(1));
 
         layout["Header"].Update(BuildHeader(state));
-
-        if (state.ViewMode == ViewMode.Grid)
-        {
-            var (cols, _) = state.GetGridDimensions();
-            if (cols == 0) // Too many sessions, fall back to list
-            {
-                state.ViewMode = ViewMode.List;
-            }
-            else
-            {
-                layout["Main"].Update(BuildGridLayout(state, allCapturedPanes));
-                layout["StatusBar"].Update(
-                    state.ActiveGroup != null
-                        ? BuildGroupGridStatusBar(state)
-                        : BuildGridStatusBar(state));
-                return layout;
-            }
-        }
 
         layout["Main"].SplitColumns(
             new Layout("Sessions").Size(35),
@@ -472,169 +453,6 @@ public static class Renderer
             .Header($"[{colorTag} bold] {Markup.Escape(repo.RepoName)} [/]")
             .BorderColor(borderColor)
             .Expand();
-    }
-
-    private static IRenderable BuildGridLayout(AppState state, Dictionary<string, string>? allCapturedPanes)
-    {
-        var visibleSessions = state.GetGridSessions();
-        var (cols, gridRows) = state.GetGridDimensions();
-        var outputLines = state.GetGridCellOutputLines();
-
-        var layoutRows = new List<Layout>();
-
-        for (var row = 0; row < gridRows; row++)
-        {
-            var layoutCols = new List<Layout>();
-
-            for (var col = 0; col < cols; col++)
-            {
-                var idx = row * cols + col;
-                var cellName = $"Cell_{row}_{col}";
-                var cellLayout = new Layout(cellName);
-
-                if (idx < visibleSessions.Count)
-                {
-                    var session = visibleSessions[idx];
-                    var isSelected = idx == state.CursorIndex;
-                    var pane = allCapturedPanes?.GetValueOrDefault(session.Name);
-                    cellLayout.Update(BuildGridCell(session, isSelected, pane, outputLines, cols));
-                }
-                else
-                {
-                    cellLayout.Update(new Panel(new Text("")).BorderColor(Color.Grey19).Expand());
-                }
-
-                layoutCols.Add(cellLayout);
-            }
-
-            var rowLayout = new Layout($"Row_{row}");
-            rowLayout.SplitColumns(layoutCols.ToArray());
-            layoutRows.Add(rowLayout);
-        }
-
-        var grid = new Layout("Grid");
-        grid.SplitRows(layoutRows.ToArray());
-        return grid;
-    }
-
-    private static Panel BuildGridCell(Session session, bool isSelected, string? capturedPane, int outputLines, int gridCols)
-    {
-        var rows = new List<IRenderable>();
-        var maxWidth = Math.Max(20, Console.WindowWidth / gridCols - 4);
-
-        // Collect output lines from pane
-        var outputRows = new List<IRenderable>();
-        if (!string.IsNullOrWhiteSpace(capturedPane) && outputLines > 0)
-        {
-            var lines = capturedPane.Split('\n');
-            var offset = Math.Max(0, lines.Length - outputLines);
-            var visible = lines.AsSpan(offset, Math.Min(outputLines, lines.Length - offset));
-
-            foreach (var line in visible)
-                outputRows.Add(AnsiParser.ParseLine(line, maxWidth));
-        }
-        else if (outputLines > 0)
-        {
-            outputRows.Add(new Markup(" [grey]No output[/]"));
-        }
-
-        // Pad with empty lines to push content to the bottom of the cell
-        var padding = Math.Max(0, outputLines - outputRows.Count);
-        for (var i = 0; i < padding; i++)
-            rows.Add(new Text(""));
-
-        // Header: name + branch (truncated to prevent wrapping)
-        var spinner = Markup.Escape(GetSpinnerFrame());
-        var status = session.IsDead ? "[red]†[/]" : session.IsWaitingForInput ? "[yellow bold]![/]" : session.IsIdle ? "[grey50]✓[/]" : $"[green]{spinner}[/]";
-        var nameStr = session.Name;
-        var branchStr = session.GitBranch;
-        var prefixLen = 3; // " X " visible chars before name
-
-        if (branchStr != null)
-        {
-            var avail = maxWidth - prefixLen - 1; // -1 for space between name and branch
-            if (nameStr.Length + branchStr.Length > avail)
-            {
-                var branchAvail = avail - nameStr.Length;
-                if (branchAvail >= 6)
-                    branchStr = branchStr[..(branchAvail - 2)] + "..";
-                else if (nameStr.Length > avail)
-                {
-                    nameStr = nameStr[..Math.Max(4, avail - 2)] + "..";
-                    branchStr = null;
-                }
-                else
-                    branchStr = null;
-            }
-        }
-        else if (nameStr.Length > maxWidth - prefixLen)
-        {
-            nameStr = nameStr[..Math.Max(4, maxWidth - prefixLen - 2)] + "..";
-        }
-
-        var name = Markup.Escape(nameStr);
-        var branch = branchStr != null ? $" [aqua]{Markup.Escape(branchStr)}[/]" : "";
-        var remoteIcon = session.RemoteHostName != null ? " [mediumpurple3]☁[/]" : "";
-        var skipIcon = session.SkipPermissions ? " [yellow]⚡[/]" : "";
-        rows.Add(new Markup($" {status} [white bold]{name}[/]{branch}{remoteIcon}{skipIcon}"));
-
-        if (session.CurrentPath != null)
-        {
-            var shortPath = ShortenPath(session.CurrentPath);
-            if (shortPath.Length > maxWidth - 1)
-                shortPath = shortPath[..(maxWidth - 3)] + "..";
-            rows.Add(new Markup($" [grey50]{Markup.Escape(shortPath)}[/]"));
-        }
-
-        var labelColor = session.ColorTag ?? "grey50";
-        rows.Add(new Rule().RuleStyle(Style.Parse(labelColor)));
-
-        // Pane output
-        rows.AddRange(outputRows);
-
-        var sessionColor = session.ColorTag != null
-            ? Style.Parse(session.ColorTag).Foreground
-            : Color.Grey42;
-
-        var borderColor = isSelected
-            ? sessionColor
-            : new Color(
-                (byte)(sessionColor.R / 2),
-                (byte)(sessionColor.G / 2),
-                (byte)(sessionColor.B / 2));
-
-        var headerColor = session.ColorTag ?? "grey50";
-        var headerName = Markup.Escape(session.Name);
-        var focusIndicator = isSelected ? " [white bold]▶[/]" : "";
-
-        return new Panel(new Rows(rows))
-            .Header($"[{headerColor} bold] {headerName} [/]{focusIndicator}")
-            .Border(isSelected ? BoxBorder.Double : BoxBorder.Rounded)
-            .BorderColor(borderColor)
-            .Expand();
-    }
-
-    private static Markup BuildGroupGridStatusBar(AppState state)
-    {
-        if (state.IsInputMode)
-            return BuildInputStatusBar(state);
-
-        var session = state.GetSelectedSession();
-        var name = session != null ? Markup.Escape(session.Name) : "session";
-        var groupName = state.ActiveGroup != null ? Markup.Escape(state.ActiveGroup) : "group";
-
-        return new Markup($" [mediumpurple3]{groupName}[/] [grey]│[/] [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/] [grey70 bold]Ctrl+G[/][grey] back [/]");
-    }
-
-    private static Markup BuildGridStatusBar(AppState state)
-    {
-        if (state.IsInputMode)
-            return BuildInputStatusBar(state);
-
-        var session = state.GetSelectedSession();
-        var name = session != null ? Markup.Escape(session.Name) : "session";
-
-        return new Markup($" [green bold]▶[/] [white]Typing to[/] [aqua]{name}[/] [grey]│[/] [grey70 bold]Ctrl+Arrows[/][grey] switch [/] [grey70 bold]Ctrl+G[/][grey] list view [/]");
     }
 
     private static Markup BuildInputStatusBar(AppState state)
