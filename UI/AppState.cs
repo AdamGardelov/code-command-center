@@ -22,6 +22,10 @@ public class AppState
     private int _savedCursorIndex;
     private HashSet<string> _knownGroupNames = [];
 
+    // Machine grouping state
+    public const string LocalMachineKey = "";
+    public Dictionary<string, bool> MachineExpansion { get; set; } = new();
+    public Dictionary<string, bool> MachineOnlineStatus { get; set; } = new();
 
     // Mobile mode state
     public bool MobileMode { get; set; }
@@ -80,6 +84,15 @@ public class AppState
                 return gh.Group;
         }
 
+        return null;
+    }
+
+    public TreeItem.MachineHeader? GetSelectedMachine()
+    {
+        var treeItems = GetTreeItems();
+        if (CursorIndex >= 0 && CursorIndex < treeItems.Count
+            && treeItems[CursorIndex] is TreeItem.MachineHeader mh)
+            return mh;
         return null;
     }
 
@@ -161,6 +174,12 @@ public class AppState
     {
         if (!ExpandedGroups.Remove(groupName))
             ExpandedGroups.Add(groupName);
+    }
+
+    public void ToggleMachineExpanded(string machineKey)
+    {
+        var current = MachineExpansion.GetValueOrDefault(machineKey, true);
+        MachineExpansion[machineKey] = !current;
     }
 
     public void InitExpandedGroups()

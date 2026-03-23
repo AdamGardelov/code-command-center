@@ -20,6 +20,14 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
 
     public List<Session> GetUntrackedRemoteSessions() => _untrackedRemoteSessions;
 
+    public Dictionary<string, bool> GetRemoteOnlineStatus()
+    {
+        var status = new Dictionary<string, bool>();
+        foreach (var (hostName, remoteBackend) in remotes)
+            status[hostName] = remoteBackend.IsOffline;
+        return status;
+    }
+
     public List<Session> ListSessions()
     {
         var all = new List<Session>();
