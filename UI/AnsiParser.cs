@@ -9,8 +9,10 @@ namespace CodeCommandCenter.UI;
 /// </summary>
 public static partial class AnsiParser
 {
-    // Matches CSI sequences: ESC [ (params) (final byte)
-    [GeneratedRegex(@"\x1b\[([0-9;]*)([A-Za-z])")]
+    // Matches CSI sequences: ESC [ (optional private-mode prefix) (params) (final byte)
+    // The optional prefix ([?>=!]?) captures private-mode sequences like \e[?1003h
+    // that would otherwise leak through and corrupt terminal state (e.g. re-enabling mouse tracking)
+    [GeneratedRegex(@"\x1b\[([?>=!]?)([0-9;]*)([A-Za-z])")]
     private static partial Regex CsiRegex();
 
     // Matches non-CSI escape sequences that must be stripped to prevent terminal state corruption.
@@ -74,9 +76,11 @@ public static partial class AnsiParser
                     }
                 }
 
-                // Only process SGR sequences (final byte 'm')
-                if (match.Groups[2].Value == "m")
-                    ApplySgr(ref state, match.Groups[1].Value);
+                // Only process standard SGR sequences (final byte 'm', no private-mode prefix)
+                // Private-mode sequences like \e[?1003h are consumed by the regex but not processed,
+                // preventing them from leaking to the terminal
+                if (match.Groups[3].Value == "m" && match.Groups[1].Value.Length == 0)
+                    ApplySgr(ref state, match.Groups[2].Value);
 
                 lastEnd = match.Index + match.Length;
             }

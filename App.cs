@@ -38,6 +38,9 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
     private readonly List<ConsoleKeyInfo> _gridKeyBatch = [];
     private DateTime _lastGridActivity = DateTime.MinValue;
     private DateTime _lastSessionLoad = DateTime.MinValue;
+    private DateTime _lastRemoteDetect = DateTime.MinValue;
+    private DateTime _lastRemoteCapture = DateTime.MinValue;
+    private Task? _pendingSessionLoad;
 
     public void Run()
     {
@@ -189,12 +192,43 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
             }
 
             // Periodically reload session list when remote hosts are configured
-            // so offline/reconnected state is detected without manual refresh
-            if (_config.RemoteHosts.Count > 0 && (DateTime.UtcNow - _lastSessionLoad).TotalSeconds > 15)
+            // so offline/reconnected state is detected without manual refresh.
+            // Run on a background task to avoid blocking the main loop (SSH round-trips
+            // to each remote host can take seconds).
+            if (_config.RemoteHosts.Count > 0 && _pendingSessionLoad == null
+                && (DateTime.UtcNow - _lastSessionLoad).TotalSeconds > 15)
             {
                 _lastSessionLoad = DateTime.UtcNow;
-                LoadSessions();
-                Render();
+                _pendingSessionLoad = Task.Run(() =>
+                {
+                    // Perform the expensive SSH work on a background thread.
+                    // ListSessions() is the only part that contacts remotes;
+                    // the rest of LoadSessions() just processes the results.
+                    return backend.ListSessions();
+                });
+            }
+
+            if (_pendingSessionLoad is { IsCompleted: true })
+            {
+                try
+                {
+                    // Apply results on the main thread
+                    var sessions = ((Task<List<Session>>)_pendingSessionLoad).Result;
+                    _state.Sessions = sessions;
+                    _state.HasUntrackedRemoteSessions = backend.GetUntrackedRemoteSessions().Count > 0;
+                    ApplySessionMetadata();
+                    LoadGroups();
+                    _state.ClampCursor();
+                    NotificationService.Cleanup(_state.Sessions.Select(s => s.Name));
+                    HookStateService.Cleanup(_state.Sessions.Select(s => s.Name));
+                    Render();
+                }
+                catch
+                {
+                    // SSH failure — ignore, will retry next interval
+                }
+
+                _pendingSessionLoad = null;
             }
 
             // Periodically capture pane content for preview/grid.
@@ -237,9 +271,23 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
 
     private void LoadSessions()
     {
-        var oldSessions = _state.Sessions.ToDictionary(s => s.Name);
         _state.Sessions = backend.ListSessions();
         _state.HasUntrackedRemoteSessions = backend.GetUntrackedRemoteSessions().Count > 0;
+        ApplySessionMetadata();
+
+        LoadGroups();
+        _state.ClampCursor();
+        NotificationService.Cleanup(_state.Sessions.Select(s => s.Name));
+        HookStateService.Cleanup(_state.Sessions.Select(s => s.Name));
+    }
+
+    /// <summary>
+    /// Applies config metadata (descriptions, colors, git info, etc.) to the current session list.
+    /// Extracted so both synchronous LoadSessions and the async background reload can share it.
+    /// </summary>
+    private void ApplySessionMetadata()
+    {
+        var oldSessions = _state.Sessions.ToDictionary(s => s.Name, s => s);
         var startCommitsDirty = false;
         foreach (var s in _state.Sessions)
         {
@@ -248,13 +296,12 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
             if (_config.SessionColors.TryGetValue(s.Name, out var color))
                 s.ColorTag = color;
             s.IsExcluded = _config.ExcludedSessions.Contains(s.Name);
-            // RemoteHostName is set authoritatively by BackendRouter.ListSessions() — don't override from config
             s.SkipPermissions = _config.SkipPermissionsSessions.Contains(s.Name);
             if (!s.IsOffline)
                 backend.ApplyStatusColor(s.Name, color ?? "grey42");
 
             // Preserve content tracking state so sessions don't briefly flash as "working"
-            if (oldSessions.TryGetValue(s.Name, out var old))
+            if (oldSessions.TryGetValue(s.Name, out var old) && old != s)
             {
                 s.PreviousContent = old.PreviousContent;
                 s.StableContentCount = old.StableContentCount;
@@ -300,11 +347,6 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
 
         if (configDirty)
             ConfigService.SaveConfig(_config);
-
-        LoadGroups();
-        _state.ClampCursor();
-        NotificationService.Cleanup(_state.Sessions.Select(s => s.Name));
-        HookStateService.Cleanup(_state.Sessions.Select(s => s.Name));
     }
 
     private void LoadGroups()
@@ -355,8 +397,20 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
             .Where(s => !s.IsExcluded)
             .ToDictionary(s => s.Name, s => s.IsIdle);
 
-        // Refresh waiting-for-input status on all sessions (single tmux call)
-        backend.DetectWaitingForInputBatch(_state.Sessions);
+        // Detect local sessions every poll (fast, no SSH).
+        // Detect remote sessions on a slower 3-second interval to avoid blocking
+        // the main loop with SSH round-trips on every 500ms capture cycle.
+        var localSessions = _state.Sessions.Where(s => s.RemoteHostName == null).ToList();
+        var remoteSessions = _state.Sessions.Where(s => s.RemoteHostName != null).ToList();
+
+        backend.DetectWaitingForInputBatch(localSessions);
+
+        var now = DateTime.UtcNow;
+        if (remoteSessions.Count > 0 && (now - _lastRemoteDetect).TotalSeconds > 3)
+        {
+            _lastRemoteDetect = now;
+            backend.DetectWaitingForInputBatch(remoteSessions);
+        }
         _hasSpinningSessions = _state.Sessions.Any(s => !s.IsWaitingForInput && !s.IsIdle && !s.IsDead);
 
         // Detect false -> true transitions and notify.
@@ -413,8 +467,18 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
         if (session == null)
             return statusChanged;
 
+        // For remote sessions, throttle pane capture to every 2 seconds to reduce SSH blocking.
+        // Local captures are fast and happen every 500ms as before.
+        var isRemote = session.RemoteHostName != null;
+        if (isRemote && (DateTime.UtcNow - _lastRemoteCapture).TotalSeconds < 2)
+            return statusChanged;
+
         var changed = statusChanged;
         var newContent = backend.CapturePaneContent(session.Name);
+
+        if (isRemote)
+            _lastRemoteCapture = DateTime.UtcNow;
+
         if (newContent != _capturedPane)
         {
             _capturedPane = newContent;
@@ -514,6 +578,10 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
         // Synchronized output — terminal buffers everything and flips atomically,
         // eliminating tearing/jumping when redrawing the full screen
         Console.Write("\e[?2026h");
+        // Disable mouse tracking before each render — captured pane content may contain
+        // sequences that re-enable mouse tracking (e.g. \e[?1003h from Claude Code output).
+        // Even though AnsiParser strips these, this acts as defense-in-depth.
+        Console.Write("\e[?1003l\e[?1006l\e[?1015l\e[?1000l");
         Console.SetCursorPosition(0, 0);
         if (_state.ViewMode == ViewMode.Settings)
             AnsiConsole.Write(Renderer.BuildSettingsLayout(_state, _config));
@@ -1054,11 +1122,13 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
             }
 
             _state.ViewMode = ViewMode.Grid;
+            _state.ClampCursor();
             ResizeGridPanes();
         }
         else
         {
             _state.ViewMode = ViewMode.List;
+            _state.ClampCursor();
         }
 
         _lastSelectedSession = null;

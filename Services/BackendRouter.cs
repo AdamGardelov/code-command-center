@@ -97,6 +97,26 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
         _isFirstList = false;
         _untrackedRemoteSessions = untracked;
 
+        // Deduplicate sessions by name — if a session name exists both locally and as a
+        // tracked remote, prefer the tracked remote (it was explicitly adopted by the user).
+        // Without this, both appear in the grid and route to the same backend.
+        var deduped = new Dictionary<string, Session>();
+        foreach (var s in all)
+        {
+            if (deduped.TryGetValue(s.Name, out var existing))
+            {
+                // Prefer the one that's tracked as remote (explicit user intent)
+                if (s.RemoteHostName != null && existing.RemoteHostName == null)
+                    deduped[s.Name] = s;
+                // else keep existing (first wins for same-type duplicates)
+            }
+            else
+            {
+                deduped[s.Name] = s;
+            }
+        }
+        all = deduped.Values.ToList();
+
         // Rebuild routing map
         _sessionHosts = new Dictionary<string, string?>();
         foreach (var s in all)
