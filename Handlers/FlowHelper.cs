@@ -285,9 +285,6 @@ public class FlowHelper(CccConfig config)
         if (OperatingSystem.IsMacOS())
             return "open";
 
-        if (OperatingSystem.IsWindows())
-            return "explorer";
-
         // Linux — check for WSL where explorer.exe is available
         try
         {

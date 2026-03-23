@@ -198,13 +198,10 @@ public static class SshControlMasterService
 
             Directory.CreateDirectory(_socketDir);
             // Restrict socket dir to owner only
-            if (!OperatingSystem.IsWindows())
-            {
-                var chmodInfo = new ProcessStartInfo { FileName = "chmod", UseShellExecute = false };
-                chmodInfo.ArgumentList.Add("700");
-                chmodInfo.ArgumentList.Add(_socketDir);
-                Process.Start(chmodInfo)?.WaitForExit(1000);
-            }
+            var chmodInfo = new ProcessStartInfo { FileName = "chmod", UseShellExecute = false };
+            chmodInfo.ArgumentList.Add("700");
+            chmodInfo.ArgumentList.Add(_socketDir);
+            Process.Start(chmodInfo)?.WaitForExit(1000);
 
             var socketPath = SocketPath(host);
 

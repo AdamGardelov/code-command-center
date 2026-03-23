@@ -1,7 +1,6 @@
 using System.Text;
 using CodeCommandCenter;
 using CodeCommandCenter.Services;
-using CodeCommandCenter.Services.ConPty;
 
 Console.OutputEncoding = Encoding.UTF8;
 Console.InputEncoding = Encoding.UTF8;
@@ -9,9 +8,7 @@ Console.InputEncoding = Encoding.UTF8;
 try
 {
     var mobile = args.Contains("-m") || args.Contains("--mobile");
-    ISessionBackend localBackend = OperatingSystem.IsWindows()
-        ? new ConPtyBackend()
-        : new TmuxBackend();
+    var localBackend = new TmuxBackend();
 
     // Load config to discover remote hosts
     var config = ConfigService.Load();

@@ -96,23 +96,15 @@ public static class SshService
         {
             var startInfo = new ProcessStartInfo
             {
-                FileName = OperatingSystem.IsWindows() ? "cmd" : "/bin/sh",
+                FileName = "/bin/sh",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
             };
 
-            if (OperatingSystem.IsWindows())
-            {
-                startInfo.ArgumentList.Add("/c");
-                startInfo.ArgumentList.Add(command);
-            }
-            else
-            {
-                startInfo.ArgumentList.Add("-c");
-                startInfo.ArgumentList.Add(command);
-            }
+            startInfo.ArgumentList.Add("-c");
+            startInfo.ArgumentList.Add(command);
 
             using var process = Process.Start(startInfo);
             if (process == null)

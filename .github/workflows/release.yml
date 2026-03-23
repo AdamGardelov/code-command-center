@@ -70,8 +70,6 @@ jobs:
             os: macos-latest
           - rid: osx-x64
             os: macos-latest
-          - rid: win-x64
-            os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -91,14 +89,8 @@ jobs:
           -p:Version=${{ needs.calculate-version.outputs.version }}
           -o publish
 
-      - name: Package (Unix)
-        if: matrix.rid != 'win-x64'
+      - name: Package
         run: tar -czf ccc-${{ matrix.rid }}.tar.gz -C publish ccc
-
-      - name: Package (Windows)
-        if: matrix.rid == 'win-x64'
-        run: Compress-Archive -Path publish/ccc.exe -DestinationPath ccc-${{ matrix.rid }}.zip
-        shell: pwsh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -129,5 +121,4 @@ jobs:
           gh release create "$VERSION" \
             --title "$VERSION" \
             --generate-notes \
-            artifacts/ccc-*/*.tar.gz \
-            artifacts/ccc-*/*.zip
+            artifacts/ccc-*/*.tar.gz

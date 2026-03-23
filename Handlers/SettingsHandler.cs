@@ -369,8 +369,7 @@ public class SettingsHandler(
             // No IDE configured — fall back to platform default
             try
             {
-                var opener = OperatingSystem.IsMacOS() ? "open" :
-                    OperatingSystem.IsWindows() ? "explorer" : "xdg-open";
+                var opener = OperatingSystem.IsMacOS() ? "open" : "xdg-open";
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = opener,

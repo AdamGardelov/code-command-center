@@ -782,10 +782,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
                 _state.SetStatus("Refreshed");
                 break;
             case "quit":
-                var activeCount = _state.Sessions.Count(s => !s.IsDead);
-                var quitMsg = OperatingSystem.IsWindows() && activeCount > 0
-                    ? $"Quit? This will terminate {activeCount} active session(s). (y/n)"
-                    : "Quit? (y/n)";
+                var quitMsg = "Quit? (y/n)";
                 _state.SetStatus(quitMsg);
                 Render();
                 var quitConfirm = Console.ReadKey(true);
@@ -1057,10 +1054,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
                 _state.SetStatus("Refreshed");
                 break;
             case "quit":
-                var mobileActiveCount = _state.Sessions.Count(s => !s.IsDead);
-                var mobileQuitMsg = OperatingSystem.IsWindows() && mobileActiveCount > 0
-                    ? $"Quit? This will terminate {mobileActiveCount} active session(s). (y/n)"
-                    : "Quit? (y/n)";
+                var mobileQuitMsg = "Quit? (y/n)";
                 _state.SetStatus(mobileQuitMsg);
                 Render();
                 var quitConfirm2 = Console.ReadKey(true);
@@ -1137,32 +1131,17 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
     private void RunUpdate()
     {
         AnsiConsole.MarkupLine($"[yellow]Updating to v{_state.LatestVersion}...[/]\n");
-
-        if (OperatingSystem.IsWindows())
+        var process = Process.Start(new ProcessStartInfo
         {
-            var script = "irm https://raw.githubusercontent.com/AdamGardelov/code-command-center/main/install.ps1 | iex";
-            var process = Process.Start(new ProcessStartInfo
+            FileName = "bash",
+            ArgumentList =
             {
-                FileName = "powershell",
-                ArgumentList = { "-NoProfile", "-Command", script },
-                UseShellExecute = false,
-            });
-            process?.WaitForExit();
-        }
-        else
-        {
-            var process = Process.Start(new ProcessStartInfo
-            {
-                FileName = "bash",
-                ArgumentList =
-                {
-                    "-c",
-                    "curl -fsSL https://raw.githubusercontent.com/AdamGardelov/code-command-center/main/install.sh | bash"
-                },
-                UseShellExecute = false,
-            });
-            process?.WaitForExit();
-        }
+                "-c",
+                "curl -fsSL https://raw.githubusercontent.com/AdamGardelov/code-command-center/main/install.sh | bash"
+            },
+            UseShellExecute = false,
+        });
+        process?.WaitForExit();
     }
 
     private static bool PruneDict(Dictionary<string, string> dict, HashSet<string> liveNames)
