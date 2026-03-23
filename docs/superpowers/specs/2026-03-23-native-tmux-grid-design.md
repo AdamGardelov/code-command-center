@@ -137,9 +137,10 @@ Same logic as current `ToggleGridView`:
 ### Enums/ViewMode.cs
 - Remove `Grid` value
 
-### Kept from current grid
+### Kept from current grid (rewritten)
 - `AppState.GetGridSessions()` — reused to determine which sessions enter the native grid
-- `AppState.ActiveGroup` / `EnterGroupGrid()` / `LeaveGroupGrid()` — track group context for grid entry
+- `AppState.ActiveGroup` — still tracks which group is being gridded (set before grid entry, cleared after)
+- `EnterGroupGrid()` / `LeaveGroupGrid()` — rewritten to only set/clear `ActiveGroup` (no longer touch `ViewMode.Grid` since grid is now a tmux attach, not a CCC view mode)
 - `ToggleGridView()` in App.cs — rewritten to orchestrate tmux join/break instead of ViewMode switch
 
 ## New code
