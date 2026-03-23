@@ -87,6 +87,12 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
         _keyMap = KeyBindingService.BuildKeyMap(bindings);
         _state.Keybindings = bindings;
 
+        // Recover from a previous crash that left sessions in a grid
+        if (backend.GridSessionExists())
+        {
+            backend.RestoreFromGrid();
+        }
+
         LoadSessions();
         _lastSessionLoad = DateTime.UtcNow;
         _updateCheck = UpdateChecker.CheckForUpdateAsync();
@@ -818,7 +824,73 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
 
     private void ToggleGridView()
     {
-        _state.SetStatus("Grid mode not yet implemented");
+        // Determine which sessions to grid
+        List<Session> gridSessions;
+        string? groupName = null;
+
+        var treeItems = _state.GetTreeItems();
+        var currentItem = treeItems.ElementAtOrDefault(_state.CursorIndex);
+
+        if (currentItem is TreeItem.SessionItem { GroupName: not null } si)
+        {
+            groupName = si.GroupName;
+            _state.EnterGroupGrid(groupName);
+            gridSessions = _state.GetGridSessions();
+        }
+        else if (currentItem is TreeItem.GroupHeader gh)
+        {
+            groupName = gh.Group.Name;
+            _state.EnterGroupGrid(groupName);
+            gridSessions = _state.GetGridSessions();
+        }
+        else
+        {
+            gridSessions = _state.GetGridSessions();
+        }
+
+        // Filter out remote sessions (grid is local tmux only)
+        gridSessions = gridSessions.Where(s => s.RemoteHostName == null).ToList();
+
+        if (gridSessions.Count < 2)
+        {
+            if (groupName != null)
+                _state.LeaveGroupGrid();
+            _state.SetStatus("Need at least 2 local sessions for grid");
+            return;
+        }
+
+        if (gridSessions.Count > 6)
+        {
+            if (groupName != null)
+                _state.LeaveGroupGrid();
+            _state.SetStatus("Too many sessions for grid (max 6)");
+            return;
+        }
+
+        var sessionNames = gridSessions.Select(s => s.Name).ToList();
+
+        // Create the grid session with native tmux panes
+        var error = backend.CreateGridSession(sessionNames);
+        if (error != null)
+        {
+            if (groupName != null)
+                _state.LeaveGroupGrid();
+            _state.SetStatus(error);
+            return;
+        }
+
+        // Attach to the grid session — blocks CCC main loop
+        backend.AttachSession("ccc-grid");
+
+        // User has detached — restore panes to original sessions
+        backend.RestoreFromGrid();
+
+        if (groupName != null)
+            _state.LeaveGroupGrid();
+
+        _lastSelectedSession = null;
+        LoadSessions();
+        Render();
     }
 
     private void RunUpdate()
