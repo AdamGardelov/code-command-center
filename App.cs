@@ -556,6 +556,29 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
                 return;
             }
 
+            if (currentItem is TreeItem.MachineHeader mh)
+            {
+                switch (actionId)
+                {
+                    case "attach":
+                    case "toggle-expand":
+                        _state.ToggleMachineExpanded(
+                            mh.IsLocal ? AppState.LocalMachineKey : mh.HostName);
+                        _state.ClampCursor();
+                        return;
+                    case "new-session":
+                        // Pre-select this machine's remote host in the create flow
+                        _sessionHandler.Create(_claudeAvailable,
+                            preSelectRemote: mh.IsLocal ? null : mh.HostName);
+                        return;
+                    case "toggle-grid":
+                        ToggleGridView();
+                        return;
+                }
+                // All other actions are no-ops on machine headers
+                return;
+            }
+
             if (currentItem is TreeItem.GroupHeader gh)
             {
                 switch (actionId)
@@ -847,6 +870,16 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
         {
             groupName = gh.Group.Name;
             _state.EnterGroupGrid(groupName);
+            gridSessions = _state.GetGridSessions();
+        }
+        else if (currentItem is TreeItem.MachineHeader mh)
+        {
+            // Grid sessions under this machine — local only (grid uses local tmux)
+            if (!mh.IsLocal || mh.IsOffline)
+            {
+                _state.SetStatus("Grid view only works for local sessions");
+                return;
+            }
             gridSessions = _state.GetGridSessions();
         }
         else
