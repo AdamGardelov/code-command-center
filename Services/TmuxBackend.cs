@@ -282,8 +282,9 @@ public class TmuxBackend : ISessionBackend
         if (initialPaneId != null)
             RunTmux("kill-pane", "-t", initialPaneId);
 
-        // Apply tiled layout
-        RunTmux("select-layout", "-t", "ccc-grid:0", "tiled");
+        // Apply layout: side-by-side for 2 panes, tiled grid for 3+
+        var layout = sessionNames.Count == 2 ? "even-horizontal" : "tiled";
+        RunTmux("select-layout", "-t", "ccc-grid:0", layout);
 
         // Bind Ctrl+G to detach from the grid session
         RunTmux("bind-key", "-T", "root", "C-g", "detach-client");
@@ -323,15 +324,15 @@ public class TmuxBackend : ISessionBackend
 
                 var originalSession = manifest[sessionIndex];
 
-                // break-pane without -t creates a new session from this pane.
                 // The original session was destroyed when join-pane moved its only pane out.
-                RunTmux("break-pane", "-d", "-s", paneId);
-
-                // break-pane creates a session with an auto-generated name.
-                // The pane ends up in the newest session. Find it by pane ID.
-                var newSession = RunTmux("display-message", "-t", paneId, "-p", "#{session_name}");
-                if (newSession != null && newSession != originalSession)
-                    RunTmux("rename-session", "-t", newSession, originalSession);
+                // Reverse the process: create a new empty session, move the pane into it,
+                // then kill the placeholder pane.
+                // (break-pane only creates new windows, NOT new sessions)
+                RunTmux("new-session", "-d", "-s", originalSession);
+                var placeholderPaneId = RunTmux("display-message", "-t", $"{originalSession}:0", "-p", "#{pane_id}");
+                RunTmux("join-pane", "-d", "-s", paneId, "-t", $"{originalSession}:0");
+                if (placeholderPaneId != null)
+                    RunTmux("kill-pane", "-t", placeholderPaneId);
 
                 sessionIndex++;
             }
