@@ -338,6 +338,10 @@ public class TmuxBackend : ISessionBackend
                 RunTmux("join-pane", "-d", "-s", paneId, "-t", $"{originalSession}:0");
                 if (placeholderPaneId != null)
                     RunTmux("kill-pane", "-t", placeholderPaneId);
+
+                // Reset window size so it adapts to the next client that attaches,
+                // rather than staying stuck at the grid cell dimensions
+                ResetWindowSize(originalSession);
             }
         }
 
@@ -345,12 +349,14 @@ public class TmuxBackend : ISessionBackend
         RunTmux("unbind-key", "-T", "root", "C-g");
 
         // Kill the grid session (cleans up dead panes)
-        RunTmux("kill-session", "-t", "ccc-grid");
+        RunTmux("kill-session", "-t", "=ccc-grid");
     }
 
     public bool GridSessionExists()
     {
-        var result = RunTmux("has-session", "-t", "ccc-grid");
+        // Use '=' prefix for exact match — without it, tmux prefix-matches
+        // and a session named "ccc-grid-something" would falsely match
+        var result = RunTmux("has-session", "-t", "=ccc-grid");
         return result != null;
     }
 
