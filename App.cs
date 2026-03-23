@@ -204,6 +204,8 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
                     var sessions = ((Task<List<Session>>)_pendingSessionLoad).Result;
                     _state.Sessions = sessions;
                     _state.HasUntrackedRemoteSessions = backend.GetUntrackedRemoteSessions().Count > 0;
+                    if (backend is BackendRouter routerForStatus)
+                        _state.MachineOnlineStatus = routerForStatus.GetRemoteOnlineStatus();
                     ApplySessionMetadata();
                     LoadGroups();
                     _state.ClampCursor();
@@ -239,6 +241,8 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
     {
         _state.Sessions = backend.ListSessions();
         _state.HasUntrackedRemoteSessions = backend.GetUntrackedRemoteSessions().Count > 0;
+        if (backend is BackendRouter router)
+            _state.MachineOnlineStatus = router.GetRemoteOnlineStatus();
         ApplySessionMetadata();
 
         LoadGroups();
