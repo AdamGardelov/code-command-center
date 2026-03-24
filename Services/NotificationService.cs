@@ -53,8 +53,6 @@ public static class NotificationService
         return message;
     }
 
-    public static void ResetCooldown(string sessionName) =>
-        _cooldowns.Remove(sessionName);
 
     public static void Cleanup(IEnumerable<string> liveSessionNames)
     {

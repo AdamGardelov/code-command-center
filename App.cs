@@ -202,12 +202,13 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
                 {
                     // Apply results on the main thread
                     var sessions = ((Task<List<Session>>)_pendingSessionLoad).Result;
+                    var previousSessions = _state.Sessions;
                     _state.Sessions = sessions;
                     _state.Config = _config;
                     _state.HasUntrackedRemoteSessions = backend.GetUntrackedRemoteSessions().Count > 0;
                     if (backend is BackendRouter routerForStatus)
                         _state.MachineOnlineStatus = routerForStatus.GetRemoteOnlineStatus();
-                    ApplySessionMetadata();
+                    ApplySessionMetadata(previousSessions);
                     LoadGroups();
                     _state.ClampCursor();
                     NotificationService.Cleanup(_state.Sessions.Select(s => s.Name));
@@ -240,12 +241,13 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
 
     private void LoadSessions()
     {
+        var previousSessions = _state.Sessions;
         _state.Sessions = backend.ListSessions();
         _state.Config = _config;
         _state.HasUntrackedRemoteSessions = backend.GetUntrackedRemoteSessions().Count > 0;
         if (backend is BackendRouter router)
             _state.MachineOnlineStatus = router.GetRemoteOnlineStatus();
-        ApplySessionMetadata();
+        ApplySessionMetadata(previousSessions);
 
         LoadGroups();
         _state.ClampCursor();
@@ -257,9 +259,9 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
     /// Applies config metadata (descriptions, colors, git info, etc.) to the current session list.
     /// Extracted so both synchronous LoadSessions and the async background reload can share it.
     /// </summary>
-    private void ApplySessionMetadata()
+    private void ApplySessionMetadata(List<Session>? previousSessions = null)
     {
-        var oldSessions = _state.Sessions.ToDictionary(s => s.Name, s => s);
+        var oldSessions = (previousSessions ?? _state.Sessions).ToDictionary(s => s.Name, s => s);
         var startCommitsDirty = false;
         foreach (var s in _state.Sessions)
         {

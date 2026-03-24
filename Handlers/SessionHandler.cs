@@ -355,8 +355,9 @@ public class SessionHandler(
         backend.ResizeWindow(session.Name, Console.WindowWidth, Console.WindowHeight);
         backend.AttachSession(session.Name);
 
-        // User detached — reset cooldown so next idle transition notifies fresh
-        NotificationService.ResetCooldown(session.Name);
+        // Cooldown is NOT reset on detach — prevents re-notifying for sessions
+        // that are already idle. The transition detection handles re-notification
+        // naturally when a session goes active and becomes idle again.
 
         // Re-enter CCC's alternate screen buffer
         Console.Write("\e(B");      // Reset charset on main screen
