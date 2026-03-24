@@ -58,8 +58,17 @@ public static class SshService
     /// Remote: ssh -t host 'cd path && claude'
     /// </summary>
     public static (string FileName, List<string> Args) BuildSessionCommand(
-        string? remoteHost, string workingDirectory, bool dangerouslySkipPermissions = false, string? initialPrompt = null)
+        string? remoteHost, string workingDirectory, bool dangerouslySkipPermissions = false, string? initialPrompt = null, bool shellOnly = false)
     {
+        var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
+
+        if (shellOnly)
+        {
+            if (remoteHost == null)
+                return (shell, ["-li"]);
+            return ("ssh", ["-t", remoteHost, $"cd {EscapePath(workingDirectory)} && exec \"$SHELL\" -li"]);
+        }
+
         var claudeCmd = dangerouslySkipPermissions ? "claude --dangerously-skip-permissions" : "claude";
         if (initialPrompt != null)
         {
@@ -68,10 +77,7 @@ public static class SshService
         }
 
         if (remoteHost == null)
-        {
-            var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
             return (shell, ["-lic", claudeCmd]);
-        }
 
         // Wrap in exec $SHELL -lc so the remote gets a login shell (loads PATH etc.)
         // This mirrors the local behavior where we use "$SHELL -lc claude".

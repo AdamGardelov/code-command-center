@@ -6,7 +6,7 @@ public interface ISessionBackend : IDisposable
 {
     // Lifecycle
     List<Session> ListSessions();
-    string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null, bool dangerouslySkipPermissions = false, string? initialPrompt = null);
+    string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null, bool dangerouslySkipPermissions = false, string? initialPrompt = null, bool shellOnly = false);
     string? KillSession(string name);
     string? RenameSession(string oldName, string newName);
 

@@ -27,7 +27,7 @@ public class SessionHandler(
         {
             var hasRemotes = config.RemoteHosts.Count > 0;
             var globalSkip = config.DangerouslySkipPermissions;
-            var totalSteps = (hasRemotes && preSelectRemote == null ? 1 : 0) + 4 + (globalSkip ? 0 : 1);
+            // Step count is dynamic — recalculated after session type is chosen
             var step = 0;
 
             // Step: Target (only if remote hosts configured)
@@ -52,7 +52,7 @@ public class SessionHandler(
             }
             else if (hasRemotes)
             {
-                FlowHelper.PrintStep(++step, totalSteps, "Target");
+                FlowHelper.PrintStep(++step, "Target");
                 remoteHost = flow.PickTarget();
 
                 if (remoteHost != null)
@@ -71,7 +71,7 @@ public class SessionHandler(
             }
 
             // Step: Directory
-            FlowHelper.PrintStep(++step, totalSteps, "Directory");
+            FlowHelper.PrintStep(++step, "Directory");
             string? worktreeBranch = null;
             string? dir;
 
@@ -92,8 +92,19 @@ public class SessionHandler(
                     throw new FlowCancelledException("Invalid directory");
             }
 
+            // Step: Session type (Claude or Shell)
+            FlowHelper.PrintStep(++step, "Type");
+            var typePrompt = new SelectionPrompt<string>()
+                .Title("[grey70]Session type[/]")
+                .HighlightStyle(new Style(Color.White, Color.Grey70))
+                .AddChoices("Claude", "Shell", FlowHelper.CancelChoice);
+            var sessionType = AnsiConsole.Prompt(typePrompt);
+            if (sessionType == FlowHelper.CancelChoice)
+                throw new FlowCancelledException();
+            var shellOnly = sessionType == "Shell";
+
             // Step: Name
-            FlowHelper.PrintStep(++step, totalSteps, "Name");
+            FlowHelper.PrintStep(++step, "Name");
             var dirName = worktreeBranch ?? dir.Split('/').LastOrDefault(s => !string.IsNullOrEmpty(s)) ?? "session";
             var defaultName = FlowHelper.SanitizeSessionName(dirName);
             var existingNames = new HashSet<string>(state.Sessions.Select(s => s.Name), StringComparer.Ordinal);
@@ -101,22 +112,25 @@ public class SessionHandler(
             var name = flow.PromptWithDefault("Session name", defaultName);
 
             // Step: Description
-            FlowHelper.PrintStep(++step, totalSteps, "Description");
+            FlowHelper.PrintStep(++step, "Description");
             var description = flow.PromptOptional("Description", null);
 
             // Step: Color
-            FlowHelper.PrintStep(++step, totalSteps, "Color");
+            FlowHelper.PrintStep(++step, "Color");
             var color = flow.PickColor();
 
-            // Step: Skip permissions
-            var skipPermissions = FlowHelper.PromptSkipPermissions(config, ref step, totalSteps);
+            // Step: Skip permissions (only for Claude sessions)
+            var skipPermissions = false;
+            if (!shellOnly)
+                skipPermissions = FlowHelper.PromptSkipPermissions(config, ref step);
 
             // Create session
             var effectiveSkip = skipPermissions || globalSkip;
-            var claudeConfigDir = remoteHost == null
+            var claudeConfigDir = remoteHost == null && !shellOnly
                 ? ConfigService.ResolveClaudeConfigDir(config, dir)
                 : null;
-            var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Name, effectiveSkip);
+            var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Name,
+                effectiveSkip, shellOnly: shellOnly);
             if (error != null)
                 throw new FlowCancelledException(error);
 
@@ -126,7 +140,7 @@ public class SessionHandler(
                 ConfigService.SaveColor(config, name, color);
             if (remoteHost != null)
                 ConfigService.SaveRemoteHost(config, name, remoteHost.Name);
-            if (effectiveSkip)
+            if (effectiveSkip && !shellOnly)
                 ConfigService.SetSkipPermissions(config, name, true);
             backend.ApplyStatusColor(name, color ?? "grey42");
             if (remoteHost == null)
