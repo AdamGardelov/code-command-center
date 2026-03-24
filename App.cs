@@ -567,9 +567,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
                         _state.ClampCursor();
                         return;
                     case "new-session":
-                        // Pre-select this machine's remote host in the create flow
-                        _sessionHandler.Create(_claudeAvailable,
-                            preSelectRemote: mh.IsLocal ? null : mh.HostName);
+                        _sessionHandler.Create(_claudeAvailable);
                         return;
                     case "toggle-grid":
                         ToggleGridView();
