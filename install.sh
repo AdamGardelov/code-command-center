@@ -38,12 +38,14 @@ curl -fsSL "$URL" -o "$TMP_DIR/$ARCHIVE"
 tar -xzf "$TMP_DIR/$ARCHIVE" -C "$TMP_DIR"
 
 # Install
+sudo mkdir -p "$INSTALL_DIR"
 if [ -w "$INSTALL_DIR" ]; then
   cp "$TMP_DIR/$BINARY" "$INSTALL_DIR/$BINARY"
   chmod +x "$INSTALL_DIR/$BINARY"
 else
   echo "Installing to $INSTALL_DIR (requires sudo)..."
-  sudo install -m 755 "$TMP_DIR/$BINARY" "$INSTALL_DIR/$BINARY"
+  sudo cp "$TMP_DIR/$BINARY" "$INSTALL_DIR/$BINARY"
+  sudo chmod 755 "$INSTALL_DIR/$BINARY"
 fi
 
 echo "Installed $BINARY $LATEST to $INSTALL_DIR/$BINARY"
