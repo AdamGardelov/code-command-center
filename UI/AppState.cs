@@ -166,21 +166,37 @@ public class AppState
             groupMachine[group.Name] = liveRemotes.Count == 1 ? liveRemotes[0] : LocalMachineKey;
         }
 
+        // Determine if any remote machine has sessions (to decide whether headers are needed)
+        var anyRemoteHasSessions = machineOrder
+            .Where(k => k != LocalMachineKey)
+            .Any(k => machineBuckets.TryGetValue(k, out var s) && s.Count > 0);
+
         foreach (var machineKey in machineOrder)
         {
             if (!machineBuckets.TryGetValue(machineKey, out var machineSessions))
                 machineSessions = [];
 
             var isLocal = machineKey == LocalMachineKey;
+
+            // Hide remote categories with no sessions
+            if (!isLocal && machineSessions.Count == 0)
+                continue;
+
+            // Skip local header if no remotes have sessions (no categories needed)
+            var showHeader = anyRemoteHasSessions;
+
             var isExpanded = MachineExpansion.GetValueOrDefault(machineKey, true);
             var isOffline = MachineOnlineStatus.GetValueOrDefault(machineKey, false);
 
-            // Count includes all sessions under this machine (standalone + grouped)
-            items.Add(new TreeItem.MachineHeader(
-                isLocal ? "Local" : machineKey, isLocal, isExpanded, isOffline));
+            if (showHeader)
+            {
+                items.Add(new TreeItem.MachineHeader(
+                    isLocal ? "Local" : machineKey, isLocal, isExpanded, isOffline,
+                    machineSessions.Count));
 
-            if (!isExpanded)
-                continue;
+                if (!isExpanded)
+                    continue;
+            }
 
             // Standalone sessions (not in any group), sorted
             var standalone = machineSessions

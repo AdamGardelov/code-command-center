@@ -90,16 +90,7 @@ public static class Renderer
                         rows.Add(BuildRepoRow(ri, isSelected));
                         break;
                     case TreeItem.MachineHeader mh:
-                        // Count sessions under this machine
-                        var machineSessionCount = 0;
-                        for (var j = i + 1; j < treeItems.Count; j++)
-                        {
-                            if (treeItems[j] is TreeItem.MachineHeader)
-                                break;
-                            if (treeItems[j] is TreeItem.SessionItem)
-                                machineSessionCount++;
-                        }
-                        rows.Add(BuildMachineHeaderRow(mh, isSelected, machineSessionCount));
+                        rows.Add(BuildMachineHeaderRow(mh, isSelected, mh.SessionCount));
                         break;
                 }
             }
