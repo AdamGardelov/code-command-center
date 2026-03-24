@@ -27,23 +27,23 @@ LATEST=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep 
 echo "Latest version: $LATEST"
 
 # Download and extract
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 ARCHIVE="ccc-${RID}.tar.gz"
 URL="https://github.com/$REPO/releases/download/${LATEST}/${ARCHIVE}"
 
 echo "Downloading $URL..."
-curl -fsSL "$URL" -o "$TMPDIR/$ARCHIVE"
-tar -xzf "$TMPDIR/$ARCHIVE" -C "$TMPDIR"
+curl -fsSL "$URL" -o "$TMP_DIR/$ARCHIVE"
+tar -xzf "$TMP_DIR/$ARCHIVE" -C "$TMP_DIR"
 
 # Install
 if [ -w "$INSTALL_DIR" ]; then
-  cp "$TMPDIR/$BINARY" "$INSTALL_DIR/$BINARY"
+  cp "$TMP_DIR/$BINARY" "$INSTALL_DIR/$BINARY"
   chmod +x "$INSTALL_DIR/$BINARY"
 else
   echo "Installing to $INSTALL_DIR (requires sudo)..."
-  sudo install -m 755 "$TMPDIR/$BINARY" "$INSTALL_DIR/$BINARY"
+  sudo install -m 755 "$TMP_DIR/$BINARY" "$INSTALL_DIR/$BINARY"
 fi
 
 echo "Installed $BINARY $LATEST to $INSTALL_DIR/$BINARY"
