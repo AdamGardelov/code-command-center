@@ -178,8 +178,8 @@ public class AppState
 
             var isLocal = machineKey == LocalMachineKey;
 
-            // Hide remote categories with no sessions
-            if (!isLocal && machineSessions.Count == 0)
+            // Hide categories with no sessions
+            if (machineSessions.Count == 0)
                 continue;
 
             // Skip local header if no remotes have sessions (no categories needed)
