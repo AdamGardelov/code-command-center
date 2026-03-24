@@ -5,6 +5,16 @@ REPO="AdamGardelov/code-command-center"
 INSTALL_DIR="/usr/local/bin"
 BINARY="ccc"
 
+# Check for tmux
+if ! command -v tmux &>/dev/null; then
+  echo "Error: tmux is required but not installed." >&2
+  case "$(uname -s)" in
+    Darwin) echo "  Install with: brew install tmux" >&2 ;;
+    Linux)  echo "  Install with: sudo apt install tmux  (or your distro's package manager)" >&2 ;;
+  esac
+  exit 1
+fi
+
 # Detect platform
 OS="$(uname -s)"
 ARCH="$(uname -m)"
