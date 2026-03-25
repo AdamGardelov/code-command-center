@@ -168,6 +168,15 @@ public static class ConfigService
             Save(config);
     }
 
+    public static void SetContainerSession(CccConfig config, string sessionName, bool enabled)
+    {
+        if (enabled)
+            config.ContainerSessions.Add(sessionName);
+        else
+            config.ContainerSessions.Remove(sessionName);
+        Save(config);
+    }
+
     public static void RenameSkipPermissions(CccConfig config, string oldName, string newName)
     {
         if (config.SkipPermissionsSessions.Remove(oldName))

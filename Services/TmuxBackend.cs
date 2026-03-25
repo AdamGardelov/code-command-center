@@ -40,16 +40,26 @@ public class TmuxBackend : ISessionBackend
         return sessions.OrderBy(s => s.Created).ThenBy(s => s.Name).ToList();
     }
 
-    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null, bool dangerouslySkipPermissions = false, string? initialPrompt = null, bool shellOnly = false)
+    public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null, bool dangerouslySkipPermissions = false, string? initialPrompt = null, bool shellOnly = false, string? containerName = null)
     {
-        var envArgs = new List<string> { "-e", $"CCC_SESSION_NAME={name}" };
-        if (!string.IsNullOrEmpty(claudeConfigDir))
+        var isContainer = containerName != null;
+
+        // For container sessions, env vars are passed via docker exec -e, not tmux -e
+        var envArgs = new List<string>();
+        if (!isContainer)
         {
             envArgs.Add("-e");
-            envArgs.Add($"CLAUDE_CONFIG_DIR={claudeConfigDir}");
+            envArgs.Add($"CCC_SESSION_NAME={name}");
+            if (!string.IsNullOrEmpty(claudeConfigDir))
+            {
+                envArgs.Add("-e");
+                envArgs.Add($"CLAUDE_CONFIG_DIR={claudeConfigDir}");
+            }
         }
 
-        var (cmdFile, cmdArgs) = SshService.BuildSessionCommand(remoteHost, workingDirectory, dangerouslySkipPermissions, initialPrompt, shellOnly);
+        var (cmdFile, cmdArgs) = SshService.BuildSessionCommand(
+            remoteHost, workingDirectory, dangerouslySkipPermissions, initialPrompt, shellOnly,
+            containerName: containerName, sessionName: isContainer ? name : null);
         // Shell-quote any arg containing spaces or & so that tmux's command string re-parsing
         // keeps multi-word args (e.g. "claude --dangerously-skip-permissions") as a single token.
         var quotedArgs = cmdArgs.ConvertAll(a => a.Contains(' ') || a.Contains('&') ? $"\"{a}\"" : a);
@@ -58,9 +68,9 @@ public class TmuxBackend : ISessionBackend
         var args = new List<string> { "new-session", "-d", "-s", name, "-n", name };
         args.AddRange(envArgs);
 
-        // For remote sessions, tmux working dir is irrelevant (cd happens on remote),
+        // For remote/container sessions, tmux working dir is irrelevant,
         // so use $HOME as a sane fallback
-        var tmuxWorkDir = remoteHost != null
+        var tmuxWorkDir = remoteHost != null || isContainer
             ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
             : workingDirectory;
 

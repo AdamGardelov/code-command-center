@@ -56,9 +56,11 @@ public static class SshService
     /// Builds the filename and arguments for launching a Claude session.
     /// Local: shell -lic claude (interactive so .bashrc/.zshrc functions are available)
     /// Remote: ssh -t host 'cd path && claude'
+    /// Container: docker exec -it -w path container zsh -lic claude
     /// </summary>
     public static (string FileName, List<string> Args) BuildSessionCommand(
-        string? remoteHost, string workingDirectory, bool dangerouslySkipPermissions = false, string? initialPrompt = null, bool shellOnly = false)
+        string? remoteHost, string workingDirectory, bool dangerouslySkipPermissions = false, string? initialPrompt = null, bool shellOnly = false,
+        string? containerName = null, string? sessionName = null)
     {
         var shell = Environment.GetEnvironmentVariable("SHELL") ?? "/bin/bash";
 
@@ -74,6 +76,18 @@ public static class SshService
         {
             var escaped = initialPrompt.Replace("'", "'\\''");
             claudeCmd += $" '{escaped}'";
+        }
+
+        if (containerName != null)
+        {
+            var args = new List<string> { "exec", "-it" };
+            if (sessionName != null)
+            {
+                args.Add("-e");
+                args.Add($"CCC_SESSION_NAME={sessionName}");
+            }
+            args.AddRange(["-w", workingDirectory, containerName, "zsh", "-lic", claudeCmd]);
+            return ("docker", args);
         }
 
         if (remoteHost == null)

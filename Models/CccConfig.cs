@@ -21,4 +21,6 @@ public class CccConfig
     public HashSet<string> SkipPermissionsSessions { get; set; } = [];
     public string PrReviewLanguage { get; set; } = "en";
     public bool PrIncludeDrafts { get; set; }
+    public string ContainerName { get; set; } = "";
+    public HashSet<string> ContainerSessions { get; set; } = [];
 }

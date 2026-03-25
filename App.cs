@@ -271,6 +271,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
                 s.ColorTag = color;
             s.IsExcluded = _config.ExcludedSessions.Contains(s.Name);
             s.SkipPermissions = _config.SkipPermissionsSessions.Contains(s.Name);
+            s.IsContainer = _config.ContainerSessions.Contains(s.Name);
             if (!s.IsOffline)
                 backend.ApplyStatusColor(s.Name, color ?? "grey42");
 
@@ -318,6 +319,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
         configDirty |= PruneDict(_config.SessionStartCommits, liveNames);
         configDirty |= PruneSet(_config.ExcludedSessions, liveNames);
         configDirty |= PruneSet(_config.SkipPermissionsSessions, liveNames);
+        configDirty |= PruneSet(_config.ContainerSessions, liveNames);
 
         if (configDirty)
             ConfigService.SaveConfig(_config);

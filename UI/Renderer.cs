@@ -126,7 +126,8 @@ public static class Renderer
         var indent = indented ? "      " : "   ";
         var rawName = Markup.Escape(session.Name);
         var spinner = Markup.Escape(GetSpinnerFrame());
-        var skipIcon = session.SkipPermissions ? "[yellow]⚡[/]" : "";
+        var icons = (session.SkipPermissions ? "[yellow]⚡[/]" : "")
+                  + (session.IsContainer ? " \U0001f433" : "");
         var nameWidth = indented ? 16 : 19;
         var name = rawName.PadRight(nameWidth);
 
@@ -134,7 +135,7 @@ public static class Renderer
         {
             var prefix = indented ? "     " : "  ";
             var escapedName = Markup.Escape(session.Name);
-            var row = $"[grey35]{prefix}✗ {escapedName}[/]{skipIcon}";
+            var row = $"[grey35]{prefix}✗ {escapedName}[/]{icons}";
             return isSelected
                 ? new Markup($"[on grey15]{row}[/]")
                 : new Markup(row);
@@ -145,17 +146,17 @@ public static class Renderer
             if (session.IsExcluded)
             {
                 if (isSelected)
-                    return new Markup($"[grey50 on grey19]{indent} [grey42]†[/] {name}[/]{skipIcon}");
-                return new Markup($"{indent} [grey42]†[/] [grey35]{name}[/]{skipIcon}");
+                    return new Markup($"[grey50 on grey19]{indent} [grey42]†[/] {name}[/]{icons}");
+                return new Markup($"{indent} [grey42]†[/] [grey35]{name}[/]{icons}");
             }
 
             if (isSelected)
             {
                 var bg = session.ColorTag ?? "grey37";
-                return new Markup($"[white on {bg}]{indent} † {name}[/]{skipIcon}");
+                return new Markup($"[white on {bg}]{indent} † {name}[/]{icons}");
             }
 
-            return new Markup($"{indent} [red]†[/] [grey50]{name}[/]{skipIcon}");
+            return new Markup($"{indent} [red]†[/] [grey50]{name}[/]{icons}");
         }
 
         var status = session.IsWaitingForInput ? "!" : session.IsIdle ? "✓" : spinner;
@@ -164,22 +165,22 @@ public static class Renderer
         {
             var excludedStatus = session.IsWaitingForInput ? "[grey42]![/]" : session.IsIdle ? "[grey42]✓[/]" : $"[grey35]{spinner}[/]";
             if (isSelected)
-                return new Markup($"[grey50 on grey19]{indent} {excludedStatus} {name}[/]{skipIcon}");
-            return new Markup($"{indent} {excludedStatus} [grey35]{name}[/]{skipIcon}");
+                return new Markup($"[grey50 on grey19]{indent} {excludedStatus} {name}[/]{icons}");
+            return new Markup($"{indent} {excludedStatus} [grey35]{name}[/]{icons}");
         }
 
         if (isSelected)
         {
             var bg = session.ColorTag ?? "grey37";
-            return new Markup($"[white on {bg}]{indent} {status} {name}[/]{skipIcon}");
+            return new Markup($"[white on {bg}]{indent} {status} {name}[/]{icons}");
         }
 
         if (session.IsWaitingForInput)
-            return new Markup($"{indent} [yellow bold]![/] [navajowhite1]{name}[/]{skipIcon}");
+            return new Markup($"{indent} [yellow bold]![/] [navajowhite1]{name}[/]{icons}");
         if (session.IsIdle)
-            return new Markup($"{indent} [grey50]✓[/] [navajowhite1]{name}[/]{skipIcon}");
+            return new Markup($"{indent} [grey50]✓[/] [navajowhite1]{name}[/]{icons}");
 
-        return new Markup($"{indent} [green]{spinner}[/] [navajowhite1]{name}[/]{skipIcon}");
+        return new Markup($"{indent} [green]{spinner}[/] [navajowhite1]{name}[/]{icons}");
     }
 
     private static Markup BuildRepoRow(TreeItem.RepoItem repo, bool isSelected)
@@ -637,7 +638,8 @@ public static class Renderer
 
         var color = session.ColorTag ?? "grey70";
         var remoteTag = session.RemoteHostName != null ? $" [mediumpurple3]@{Markup.Escape(session.RemoteHostName)}[/]" : "";
-        rows.Add(new Markup($" [{color} bold]{Markup.Escape(session.Name)}[/]{remoteTag}"));
+        var containerTag = session.IsContainer ? " \U0001f433" : "";
+        rows.Add(new Markup($" [{color} bold]{Markup.Escape(session.Name)}[/]{remoteTag}{containerTag}"));
 
         var branch = session.GitBranch != null ? $"[aqua]{Markup.Escape(session.GitBranch)}[/]" : "[grey]no branch[/]";
         var path = session.CurrentPath != null ? $" [grey50]{Markup.Escape(ShortenPath(session.CurrentPath))}[/]" : "";

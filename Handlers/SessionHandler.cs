@@ -103,6 +103,26 @@ public class SessionHandler(
                 throw new FlowCancelledException();
             var shellOnly = sessionType == "Shell";
 
+            // Step: Container (only if configured, running, and local session)
+            string? containerName = null;
+            if (remoteHost == null && !string.IsNullOrEmpty(config.ContainerName))
+            {
+                var containerRunning = ContainerService.IsRunning(config.ContainerName);
+                if (containerRunning)
+                {
+                    FlowHelper.PrintStep(++step, "Environment");
+                    var envPrompt = new SelectionPrompt<string>()
+                        .Title("[grey70]Run in container or locally?[/]")
+                        .HighlightStyle(new Style(Color.White, Color.Grey70))
+                        .AddChoices($"\U0001f433 Container ({Markup.Escape(config.ContainerName)})", "Local", FlowHelper.CancelChoice);
+                    var envChoice = AnsiConsole.Prompt(envPrompt);
+                    if (envChoice == FlowHelper.CancelChoice)
+                        throw new FlowCancelledException();
+                    if (envChoice.StartsWith("\U0001f433"))
+                        containerName = config.ContainerName;
+                }
+            }
+
             // Step: Name
             FlowHelper.PrintStep(++step, "Name");
             var dirName = worktreeBranch ?? dir.Split('/').LastOrDefault(s => !string.IsNullOrEmpty(s)) ?? "session";
@@ -126,11 +146,11 @@ public class SessionHandler(
 
             // Create session
             var effectiveSkip = skipPermissions || globalSkip;
-            var claudeConfigDir = remoteHost == null && !shellOnly
+            var claudeConfigDir = remoteHost == null && containerName == null && !shellOnly
                 ? ConfigService.ResolveClaudeConfigDir(config, dir)
                 : null;
             var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Name,
-                effectiveSkip, shellOnly: shellOnly);
+                effectiveSkip, shellOnly: shellOnly, containerName: containerName);
             if (error != null)
                 throw new FlowCancelledException(error);
 
@@ -142,6 +162,8 @@ public class SessionHandler(
                 ConfigService.SaveRemoteHost(config, name, remoteHost.Name);
             if (effectiveSkip && !shellOnly)
                 ConfigService.SetSkipPermissions(config, name, true);
+            if (containerName != null)
+                ConfigService.SetContainerSession(config, name, true);
             backend.ApplyStatusColor(name, color ?? "grey42");
             if (remoteHost == null)
                 backend.AttachSession(name);
@@ -242,6 +264,7 @@ public class SessionHandler(
                 ConfigService.RemoveStartCommit(config, session.Name);
                 ConfigService.RemoveRemoteHost(config, session.Name);
                 ConfigService.RemoveSkipPermissions(config, session.Name);
+                ConfigService.SetContainerSession(config, session.Name, false);
                 state.SetStatus("Session killed");
             }
             else

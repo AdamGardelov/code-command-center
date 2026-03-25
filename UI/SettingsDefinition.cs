@@ -62,6 +62,13 @@ public static class SettingsDefinition
             GetValue = c => c.WorktreeBasePath,
             SetValue = (c, v) => c.WorktreeBasePath = v,
         },
+        new()
+        {
+            Label = "Container Name",
+            Type = SettingsItemType.Text,
+            GetValue = c => c.ContainerName,
+            SetValue = (c, v) => c.ContainerName = v,
+        },
     ];
 
     private static List<SettingsItem> BuildPullRequestItems(CccConfig config) =>
