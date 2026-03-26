@@ -65,7 +65,11 @@ public class TmuxBackend : ISessionBackend
         var quotedArgs = cmdArgs.ConvertAll(a => a.Contains(' ') || a.Contains('&') ? $"\"{a}\"" : a);
         var shellCommand = $"{cmdFile} {string.Join(" ", quotedArgs)}";
 
-        var args = new List<string> { "new-session", "-d", "-s", name, "-n", name };
+        var args = new List<string>
+        {
+            "new-session", "-d", "-s", name, "-n", name,
+            "-x", Console.WindowWidth.ToString(), "-y", Console.WindowHeight.ToString()
+        };
         args.AddRange(envArgs);
 
         // For remote/container sessions, tmux working dir is irrelevant,

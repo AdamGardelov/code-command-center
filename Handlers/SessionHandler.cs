@@ -199,7 +199,7 @@ public class SessionHandler(
                 ConfigService.SetContainerSession(config, name, containerName);
             backend.ApplyStatusColor(name, color ?? "grey42");
             if (remoteHost == null)
-                backend.AttachSession(name);
+                AttachSessionByName(name);
             loadSessions();
             resetPaneCache();
         }, state);
@@ -270,7 +270,7 @@ public class SessionHandler(
                 ConfigService.SaveColor(config, sessionName, color);
             ConfigService.SaveDescription(config, sessionName, $"PR #{pr.Number}: {pr.Title}");
             backend.ApplyStatusColor(sessionName, color ?? "grey42");
-            backend.AttachSession(sessionName);
+            AttachSessionByName(sessionName);
             loadSessions();
             resetPaneCache();
         }, state);
@@ -399,6 +399,11 @@ public class SessionHandler(
             return;
         }
 
+        AttachSessionByName(session.Name);
+    }
+
+    private void AttachSessionByName(string sessionName)
+    {
         // Exit CCC's alternate screen so tmux attach renders to normal screen
         Console.Write("\e[?1049l"); // Leave alternate screen
         Console.Write("\e(B");      // Reset charset — previous remote session may have corrupted it
@@ -409,8 +414,8 @@ public class SessionHandler(
         // Resize tmux window to full terminal size before attaching.
         // CCC shrinks windows to preview width for the sidebar — without this resize,
         // the session would display at preview width with tmux dot-filler on the right.
-        backend.ResizeWindow(session.Name, Console.WindowWidth, Console.WindowHeight);
-        backend.AttachSession(session.Name);
+        backend.ResizeWindow(sessionName, Console.WindowWidth, Console.WindowHeight);
+        backend.AttachSession(sessionName);
 
         // Cooldown is NOT reset on detach — prevents re-notifying for sessions
         // that are already idle. The transition detection handles re-notification
