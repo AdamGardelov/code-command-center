@@ -22,4 +22,5 @@ public class Session
     public bool SkipPermissions { get; set; }
     public bool IsOffline { get; set; }
     public bool IsContainer { get; set; }
+    public string? ContainerName { get; set; }
 }

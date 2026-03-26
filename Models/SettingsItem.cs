@@ -11,4 +11,5 @@ public class SettingsItem
     public string? ActionId { get; init; }
     public string? RemoteHostName { get; init; }
     public int? FavoriteIndex { get; init; }
+    public int? ContainerIndex { get; init; }
 }

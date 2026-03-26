@@ -55,7 +55,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
 
         _flow = new FlowHelper(_config);
         _diffHandler = new DiffHandler(_state);
-        _settingsHandler = new SettingsHandler(_state, _config, Render, RefreshKeybindings);
+        _settingsHandler = new SettingsHandler(_state, _config, _flow, Render, RefreshKeybindings);
         _sessionHandler = new SessionHandler(_state, _config, _flow, backend, LoadSessions, Render, () =>
         {
             _lastSelectedSession = null;
@@ -271,7 +271,11 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
                 s.ColorTag = color;
             s.IsExcluded = _config.ExcludedSessions.Contains(s.Name);
             s.SkipPermissions = _config.SkipPermissionsSessions.Contains(s.Name);
-            s.IsContainer = _config.ContainerSessions.Contains(s.Name);
+            if (_config.SessionContainers.TryGetValue(s.Name, out var containerName))
+            {
+                s.IsContainer = true;
+                s.ContainerName = containerName;
+            }
             if (!s.IsOffline)
                 backend.ApplyStatusColor(s.Name, color ?? "grey42");
 
@@ -319,7 +323,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
         configDirty |= PruneDict(_config.SessionStartCommits, liveNames);
         configDirty |= PruneSet(_config.ExcludedSessions, liveNames);
         configDirty |= PruneSet(_config.SkipPermissionsSessions, liveNames);
-        configDirty |= PruneSet(_config.ContainerSessions, liveNames);
+        configDirty |= PruneDict(_config.SessionContainers, liveNames);
 
         if (configDirty)
             ConfigService.SaveConfig(_config);

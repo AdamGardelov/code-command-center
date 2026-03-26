@@ -78,8 +78,19 @@ public static class SshService
             claudeCmd += $" '{escaped}'";
         }
 
+        if (containerName != null && remoteHost != null)
+        {
+            // Remote container: ssh -t host 'docker exec -it -e ... -w path container zsh -lic claude'
+            var dockerParts = new List<string> { "docker", "exec", "-it" };
+            if (sessionName != null)
+                dockerParts.Add($"-e CCC_SESSION_NAME={sessionName}");
+            dockerParts.AddRange(["-w", EscapeSegment(workingDirectory), containerName, "zsh", "-lic", EscapeSegment(claudeCmd)]);
+            return ("ssh", ["-t", remoteHost, string.Join(" ", dockerParts)]);
+        }
+
         if (containerName != null)
         {
+            // Local container: docker exec -it -e ... -w path container zsh -lic claude
             var args = new List<string> { "exec", "-it" };
             if (sessionName != null)
             {

@@ -40,6 +40,12 @@ public static class SettingsDefinition
         },
         new()
         {
+            Name = "Containers",
+            Icon = "\U0001f433",
+            BuildItems = BuildContainerItems,
+        },
+        new()
+        {
             Name = "Advanced",
             Icon = "⚡",
             BuildItems = BuildAdvancedItems,
@@ -61,13 +67,6 @@ public static class SettingsDefinition
             Type = SettingsItemType.Text,
             GetValue = c => c.WorktreeBasePath,
             SetValue = (c, v) => c.WorktreeBasePath = v,
-        },
-        new()
-        {
-            Label = "Container Name",
-            Type = SettingsItemType.Text,
-            GetValue = c => c.ContainerName,
-            SetValue = (c, v) => c.ContainerName = v,
         },
     ];
 
@@ -271,6 +270,40 @@ public static class SettingsDefinition
                 RemoteHostName = hostName,
             });
         }
+
+        return items;
+    }
+
+    private static List<SettingsItem> BuildContainerItems(CccConfig config)
+    {
+        var items = new List<SettingsItem>();
+
+        for (var i = 0; i < config.Containers.Count; i++)
+        {
+            var index = i;
+            var container = config.Containers[index];
+            var hostTag = container.RemoteHost != null ? $" @{container.RemoteHost}" : "";
+            items.Add(new SettingsItem
+            {
+                Label = $"{container.Name}{hostTag}",
+                Type = SettingsItemType.Text,
+                ContainerIndex = index,
+                GetValue = c => index < c.Containers.Count
+                    ? c.Containers[index].Label ?? ""
+                    : "",
+                SetValue = (c, v) =>
+                {
+                    if (index < c.Containers.Count)
+                        c.Containers[index].Label = string.IsNullOrWhiteSpace(v) ? null : v;
+                },
+            });
+        }
+
+        items.Add(new SettingsItem
+        {
+            Label = "+ Add Container",
+            Type = SettingsItemType.Action,
+        });
 
         return items;
     }

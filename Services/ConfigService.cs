@@ -36,7 +36,10 @@ public static class ConfigService
             var json = File.ReadAllText(_configPath);
             var config = JsonSerializer.Deserialize<CccConfig>(json, _jsonOptions) ?? new CccConfig();
 
-            if (BackfillKeybindings(config))
+            var dirty = BackfillKeybindings(config);
+            dirty |= MigrateContainerConfig(config);
+
+            if (dirty)
                 Save(config);
 
             return config;
@@ -168,13 +171,28 @@ public static class ConfigService
             Save(config);
     }
 
-    public static void SetContainerSession(CccConfig config, string sessionName, bool enabled)
+    public static void SetContainerSession(CccConfig config, string sessionName, string? containerName)
     {
-        if (enabled)
-            config.ContainerSessions.Add(sessionName);
+        if (containerName != null)
+            config.SessionContainers[sessionName] = containerName;
         else
-            config.ContainerSessions.Remove(sessionName);
+            config.SessionContainers.Remove(sessionName);
         Save(config);
+    }
+
+    public static void RemoveContainerSession(CccConfig config, string sessionName)
+    {
+        if (config.SessionContainers.Remove(sessionName))
+            Save(config);
+    }
+
+    public static void RenameContainerSession(CccConfig config, string oldName, string newName)
+    {
+        if (config.SessionContainers.Remove(oldName, out var container))
+        {
+            config.SessionContainers[newName] = container;
+            Save(config);
+        }
     }
 
     public static void RenameSkipPermissions(CccConfig config, string oldName, string newName)
@@ -184,6 +202,19 @@ public static class ConfigService
             config.SkipPermissionsSessions.Add(newName);
             Save(config);
         }
+    }
+
+    private static bool MigrateContainerConfig(CccConfig config)
+    {
+        if (string.IsNullOrEmpty(config.ContainerName))
+            return false;
+
+        // Migrate legacy single ContainerName to Containers list
+        if (!config.Containers.Any(c => c.Name == config.ContainerName && c.RemoteHost == null))
+            config.Containers.Add(new ContainerConfig { Name = config.ContainerName });
+
+        config.ContainerName = "";
+        return true;
     }
 
     private static bool BackfillKeybindings(CccConfig config)

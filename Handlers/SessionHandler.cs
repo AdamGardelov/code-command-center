@@ -103,23 +103,56 @@ public class SessionHandler(
                 throw new FlowCancelledException();
             var shellOnly = sessionType == "Shell";
 
-            // Step: Container (only if configured, running, and local session)
+            // Step: Container (check for containers matching session target)
             string? containerName = null;
-            if (remoteHost == null && !string.IsNullOrEmpty(config.ContainerName))
             {
-                var containerRunning = ContainerService.IsRunning(config.ContainerName);
-                if (containerRunning)
+                var remoteHostName = remoteHost?.Name;
+                var candidates = config.Containers
+                    .Where(c => c.RemoteHost == remoteHostName)
+                    .ToList();
+
+                // Check which containers are running
+                var runningContainers = candidates
+                    .Where(c => ContainerService.IsRunning(c.Name, remoteHost?.Host))
+                    .ToList();
+
+                if (runningContainers.Count == 1)
                 {
+                    var c = runningContainers[0];
+                    var label = !string.IsNullOrEmpty(c.Label) ? c.Label : c.Name;
                     FlowHelper.PrintStep(++step, "Environment");
                     var envPrompt = new SelectionPrompt<string>()
                         .Title("[grey70]Run in container or locally?[/]")
                         .HighlightStyle(new Style(Color.White, Color.Grey70))
-                        .AddChoices($"\U0001f433 Container ({Markup.Escape(config.ContainerName)})", "Local", FlowHelper.CancelChoice);
+                        .AddChoices($"\U0001f433 {Markup.Escape(label)}", "Local", FlowHelper.CancelChoice);
                     var envChoice = AnsiConsole.Prompt(envPrompt);
                     if (envChoice == FlowHelper.CancelChoice)
                         throw new FlowCancelledException();
                     if (envChoice.StartsWith("\U0001f433"))
-                        containerName = config.ContainerName;
+                        containerName = c.Name;
+                }
+                else if (runningContainers.Count > 1)
+                {
+                    FlowHelper.PrintStep(++step, "Environment");
+                    var envPrompt = new SelectionPrompt<string>()
+                        .Title("[grey70]Run in container or locally?[/]")
+                        .HighlightStyle(new Style(Color.White, Color.Grey70));
+                    foreach (var c in runningContainers)
+                    {
+                        var label = !string.IsNullOrEmpty(c.Label) ? c.Label : c.Name;
+                        envPrompt.AddChoice($"\U0001f433 {Markup.Escape(label)}");
+                    }
+                    envPrompt.AddChoices("Local", FlowHelper.CancelChoice);
+                    var envChoice = AnsiConsole.Prompt(envPrompt);
+                    if (envChoice == FlowHelper.CancelChoice)
+                        throw new FlowCancelledException();
+                    if (envChoice.StartsWith("\U0001f433"))
+                    {
+                        var selectedLabel = Markup.Remove(envChoice[3..]);
+                        var selected = runningContainers.First(c =>
+                            (!string.IsNullOrEmpty(c.Label) ? c.Label : c.Name) == selectedLabel);
+                        containerName = selected.Name;
+                    }
                 }
             }
 
@@ -163,7 +196,7 @@ public class SessionHandler(
             if (effectiveSkip && !shellOnly)
                 ConfigService.SetSkipPermissions(config, name, true);
             if (containerName != null)
-                ConfigService.SetContainerSession(config, name, true);
+                ConfigService.SetContainerSession(config, name, containerName);
             backend.ApplyStatusColor(name, color ?? "grey42");
             if (remoteHost == null)
                 backend.AttachSession(name);
@@ -264,7 +297,7 @@ public class SessionHandler(
                 ConfigService.RemoveStartCommit(config, session.Name);
                 ConfigService.RemoveRemoteHost(config, session.Name);
                 ConfigService.RemoveSkipPermissions(config, session.Name);
-                ConfigService.SetContainerSession(config, session.Name, false);
+                ConfigService.RemoveContainerSession(config, session.Name);
                 state.SetStatus("Session killed");
             }
             else
@@ -312,6 +345,7 @@ public class SessionHandler(
                 ConfigService.RenameStartCommit(config, currentName, newName);
                 ConfigService.RenameRemoteHost(config, currentName, newName);
                 ConfigService.RenameSkipPermissions(config, currentName, newName);
+                ConfigService.RenameContainerSession(config, currentName, newName);
                 currentName = newName;
                 changed = true;
             }

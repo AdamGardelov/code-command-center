@@ -59,10 +59,15 @@ public class RemoteTmuxBackend : ISessionBackend
 
     public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null, bool dangerouslySkipPermissions = false, string? initialPrompt = null, bool shellOnly = false, string? containerName = null)
     {
+        var isContainer = containerName != null;
         string shellCmd;
+
         if (shellOnly)
         {
-            shellCmd = "bash -li";
+            if (isContainer)
+                shellCmd = $"docker exec -it -e CCC_SESSION_NAME={name} -w {SshControlMasterService.ShellQuote(workingDirectory)} {containerName} zsh -li";
+            else
+                shellCmd = "bash -li";
         }
         else
         {
@@ -72,18 +77,39 @@ public class RemoteTmuxBackend : ISessionBackend
                 var escaped = initialPrompt.Replace("'", "'\\''");
                 claudeCmd += $" '{escaped}'";
             }
-            // Use tmux -c flag for working directory instead of cd && which gets
-            // split by the remote SSH shell (SSH joins ArgumentList into one string)
-            shellCmd = $"bash -lc '{claudeCmd.Replace("'", "'\\''")}'";
+
+            if (isContainer)
+            {
+                // Container: docker exec -it -e ... -w path container zsh -lic 'claude'
+                shellCmd = $"docker exec -it -e CCC_SESSION_NAME={name} -w {SshControlMasterService.ShellQuote(workingDirectory)} {containerName} zsh -lic '{claudeCmd.Replace("'", "'\\''")}'";
+            }
+            else
+            {
+                // Use tmux -c flag for working directory instead of cd && which gets
+                // split by the remote SSH shell (SSH joins ArgumentList into one string)
+                shellCmd = $"bash -lc '{claudeCmd.Replace("'", "'\\''")}'";
+            }
         }
 
         var args = new List<string>
         {
             "new-session", "-d", "-s", name, "-n", name,
-            "-c", workingDirectory,
-            "-e", $"CCC_SESSION_NAME={name}",
         };
-        if (!string.IsNullOrEmpty(claudeConfigDir))
+
+        if (isContainer)
+        {
+            // For container sessions, working dir is handled by docker -w flag
+            // Use remote home dir for tmux
+            args.AddRange(["-c", "~"]);
+        }
+        else
+        {
+            args.AddRange(["-c", workingDirectory]);
+            args.Add("-e");
+            args.Add($"CCC_SESSION_NAME={name}");
+        }
+
+        if (!string.IsNullOrEmpty(claudeConfigDir) && !isContainer)
         {
             args.Add("-e");
             args.Add($"CLAUDE_CONFIG_DIR={claudeConfigDir}");

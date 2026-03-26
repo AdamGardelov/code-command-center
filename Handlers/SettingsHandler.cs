@@ -3,12 +3,14 @@ using CodeCommandCenter.Enums;
 using CodeCommandCenter.Models;
 using CodeCommandCenter.Services;
 using CodeCommandCenter.UI;
+using Spectre.Console;
 
 namespace CodeCommandCenter.Handlers;
 
 public class SettingsHandler(
     AppState state,
     CccConfig config,
+    FlowHelper flow,
     Action render,
     Action refreshKeybindings)
 {
@@ -124,6 +126,20 @@ public class SettingsHandler(
                     return;
                 case 'd':
                     DeleteFavorite(items);
+                    return;
+            }
+        }
+
+        // Containers shortcuts
+        if (state.SettingsFocusRight && currentCategory.Name == "Containers")
+        {
+            switch (key.KeyChar)
+            {
+                case 'n':
+                    AddContainer();
+                    return;
+                case 'd':
+                    DeleteContainer(items);
                     return;
             }
         }
@@ -279,6 +295,9 @@ public class SettingsHandler(
             case "+ Add Remote Favorite":
                 AddFavorite(item.RemoteHostName);
                 break;
+            case "+ Add Container":
+                AddContainer();
+                break;
         }
     }
 
@@ -312,6 +331,80 @@ public class SettingsHandler(
             ConfigService.SaveConfig(config);
             state.SetStatus($"Added '{name}'");
         }, state);
+    }
+
+    private void AddContainer()
+    {
+        FlowHelper.RunFlow("Add Container", () =>
+        {
+            var totalSteps = config.RemoteHosts.Count > 0 ? 3 : 2;
+            var step = 0;
+
+            FlowHelper.PrintStep(++step, totalSteps, "Container Name");
+            var name = FlowHelper.RequireText("[grey70]Docker container name:[/]");
+
+            string? remoteHost = null;
+            if (config.RemoteHosts.Count > 0)
+            {
+                FlowHelper.PrintStep(++step, totalSteps, "Host");
+                var hostChoices = new List<string> { "Local" };
+                hostChoices.AddRange(config.RemoteHosts.Select(h => h.Name));
+                hostChoices.Add(FlowHelper.CancelChoice);
+
+                var hostPrompt = new SelectionPrompt<string>()
+                    .Title("[grey70]Where does this container run?[/]")
+                    .HighlightStyle(new Style(Color.White, Color.Grey70))
+                    .AddChoices(hostChoices);
+                var hostChoice = AnsiConsole.Prompt(hostPrompt);
+                if (hostChoice == FlowHelper.CancelChoice)
+                    throw new FlowCancelledException();
+                if (hostChoice != "Local")
+                    remoteHost = hostChoice;
+            }
+
+            FlowHelper.PrintStep(++step, totalSteps, "Label");
+            var label = flow.PromptOptional("Label (optional)", null);
+
+            config.Containers.Add(new ContainerConfig
+            {
+                Name = name,
+                RemoteHost = remoteHost,
+                Label = string.IsNullOrWhiteSpace(label) ? null : label,
+            });
+            ConfigService.SaveConfig(config);
+            state.SetStatus($"Added container '{name}'");
+        }, state);
+    }
+
+    private void DeleteContainer(List<SettingsItem> items)
+    {
+        if (state.SettingsItemCursor >= items.Count)
+            return;
+
+        var currentItem = items[state.SettingsItemCursor];
+        if (currentItem.ContainerIndex == null)
+            return;
+
+        var containerIndex = currentItem.ContainerIndex.Value;
+        if (containerIndex >= config.Containers.Count)
+            return;
+
+        var container = config.Containers[containerIndex];
+        state.SetStatus($"Delete container '{container.Name}'? (y/n)");
+        render();
+
+        var confirm = Console.ReadKey(true);
+        if (confirm.Key == ConsoleKey.Y)
+        {
+            config.Containers.RemoveAt(containerIndex);
+            ConfigService.SaveConfig(config);
+            state.SettingsItemCursor = Math.Max(0, state.SettingsItemCursor - 1);
+            state.SetStatus("Deleted");
+        }
+        else
+        {
+            state.SetStatus("Cancelled");
+        }
     }
 
     private void DeleteFavorite(List<SettingsItem> items)
