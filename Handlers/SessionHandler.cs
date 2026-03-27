@@ -164,13 +164,8 @@ public class SessionHandler(
             defaultName = FlowHelper.UniqueSessionName(defaultName, existingNames, " ");
             var name = flow.PromptWithDefault("Session name", defaultName);
 
-            // Step: Description
-            FlowHelper.PrintStep(++step, "Description");
-            var description = flow.PromptOptional("Description", null);
-
-            // Step: Color
-            FlowHelper.PrintStep(++step, "Color");
-            var color = flow.PickColor();
+            // Auto-assign color
+            var color = FlowHelper.PickRandomUnusedColor(config);
 
             // Step: Skip permissions (only for Claude sessions)
             var skipPermissions = false;
@@ -187,8 +182,6 @@ public class SessionHandler(
             if (error != null)
                 throw new FlowCancelledException(error);
 
-            if (!string.IsNullOrWhiteSpace(description))
-                ConfigService.SaveDescription(config, name, description);
             if (color != null)
                 ConfigService.SaveColor(config, name, color);
             if (remoteHost != null)
@@ -489,7 +482,7 @@ public class SessionHandler(
 
         FlowHelper.RunFlow("Adopt Remote Session", () =>
         {
-            var totalSteps = config.DangerouslySkipPermissions ? 3 : 4;
+            var totalSteps = config.DangerouslySkipPermissions ? 1 : 2;
             var step = 0;
 
             FlowHelper.PrintStep(++step, totalSteps, "Session");
@@ -515,21 +508,14 @@ public class SessionHandler(
             var session = untracked.FirstOrDefault(s => s.Name == sessionName)
                           ?? throw new FlowCancelledException("Session not found");
 
-            // Step: Description
-            FlowHelper.PrintStep(++step, totalSteps, "Description");
-            var description = flow.PromptOptional("Description", null);
-
-            // Step: Color
-            FlowHelper.PrintStep(++step, totalSteps, "Color");
-            var color = flow.PickColor();
+            // Auto-assign color
+            var color = FlowHelper.PickRandomUnusedColor(config);
 
             // Step: Skip permissions
             var skipPermissions = FlowHelper.PromptSkipPermissions(config, ref step, totalSteps);
 
             // Track the session
             ConfigService.SaveRemoteHost(config, session.Name, session.RemoteHostName!);
-            if (!string.IsNullOrWhiteSpace(description))
-                ConfigService.SaveDescription(config, session.Name, description);
             if (color != null)
             {
                 ConfigService.SaveColor(config, session.Name, color);

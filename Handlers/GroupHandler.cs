@@ -343,7 +343,7 @@ public class GroupHandler(
         if (available.Count == 0)
             throw new FlowCancelledException("All worktrees already have active groups");
 
-        FlowHelper.PrintStep(1, 2, "Worktree");
+        FlowHelper.PrintStep(1, 1, "Worktree");
         var prompt = new SelectionPrompt<string>()
             .Title("[grey70]Select a worktree feature[/]")
             .HighlightStyle(new Style(Color.White, Color.Grey70));
@@ -364,8 +364,7 @@ public class GroupHandler(
         var feature = available.FirstOrDefault(f => f.Name == selectedName)
                       ?? throw new FlowCancelledException("Feature not found");
 
-        FlowHelper.PrintStep(2, 2, "Color");
-        var color = flow.PickColor();
+        var color = FlowHelper.PickRandomUnusedColor(config);
 
         var group = new SessionGroup
         {
@@ -389,7 +388,7 @@ public class GroupHandler(
         if (gitFavorites.Count < 2)
             throw new FlowCancelledException("Need at least 2 git repos in favorites");
 
-        FlowHelper.PrintStep(1, 3, "Repositories");
+        FlowHelper.PrintStep(1, 2, "Repositories");
         var selectedRepos = AnsiConsole.Prompt(
             new MultiSelectionPrompt<string>()
                 .Title("[grey70]Select repos[/]")
@@ -401,7 +400,7 @@ public class GroupHandler(
         if (selectedRepos.Count < 2)
             throw new FlowCancelledException("Groups need at least 2 repos");
 
-        FlowHelper.PrintStep(2, 3, "Feature name");
+        FlowHelper.PrintStep(2, 2, "Feature name");
         var featureName = FlowHelper.RequireText("[grey70]Feature name[/] [grey](used for branch + folder)[/][grey70]:[/]");
 
         var sanitizedName = FlowHelper.SanitizeSessionName(featureName);
@@ -410,8 +409,7 @@ public class GroupHandler(
         if (config.Groups.ContainsKey(sanitizedName))
             throw new FlowCancelledException($"Group '{sanitizedName}' already exists");
 
-        FlowHelper.PrintStep(3, 3, "Color");
-        var color = flow.PickColor();
+        var color = FlowHelper.PickRandomUnusedColor(config);
 
         var basePath = ConfigService.ExpandPath(config.WorktreeBasePath);
         var featurePath = Path.Combine(basePath, branchName);
@@ -475,7 +473,7 @@ public class GroupHandler(
 
     private void CreateManually()
     {
-        var totalSteps = config.DangerouslySkipPermissions ? 3 : 4;
+        var totalSteps = config.DangerouslySkipPermissions ? 2 : 3;
         var step = 0;
 
         FlowHelper.PrintStep(++step, totalSteps, "Name");
@@ -529,8 +527,7 @@ public class GroupHandler(
         if (directories.Count < 2)
             throw new FlowCancelledException("Groups need at least 2 sessions");
 
-        FlowHelper.PrintStep(++step, totalSteps, "Color");
-        var color = flow.PickColor();
+        var color = FlowHelper.PickRandomUnusedColor(config);
 
         var skipPermissions = FlowHelper.PromptSkipPermissions(config, ref step, totalSteps);
         var effectiveSkip = skipPermissions || config.DangerouslySkipPermissions;
