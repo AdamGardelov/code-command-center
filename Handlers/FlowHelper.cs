@@ -13,6 +13,7 @@ public class FlowHelper(CccConfig config)
 
     public const string CancelChoice = "Cancel";
     private const string _customPathChoice = "Custom path...";
+    private const string _worktreeBrowseChoice = "⑂ Worktrees...";
     private const string _worktreePrefix = "\u2442 "; // ⑂
 
     private static readonly (string Label, string SpectreColor)[] _colorPalette =
@@ -386,6 +387,10 @@ public class FlowHelper(CccConfig config)
                     prompt.AddChoice($"{_worktreePrefix}{fav.Name}  [grey50](new worktree)[/]");
             }
 
+            var wtBasePath = ConfigService.ExpandPath(config.WorktreeBasePath);
+            if (Directory.Exists(wtBasePath) && Directory.GetDirectories(wtBasePath).Length > 0)
+                prompt.AddChoice(_worktreeBrowseChoice);
+
             prompt.AddChoice(_customPathChoice);
             prompt.AddChoice(CancelChoice);
 
@@ -400,6 +405,13 @@ public class FlowHelper(CccConfig config)
                     if (custom != null)
                         return custom;
                     continue; // empty input -> back to picker
+                }
+                case _worktreeBrowseChoice:
+                {
+                    var picked = PickWorktreeDirectory(wtBasePath);
+                    if (picked != null)
+                        return picked;
+                    continue; // back to picker
                 }
             }
 
@@ -439,6 +451,51 @@ public class FlowHelper(CccConfig config)
             var match = favorites.FirstOrDefault(f => f.Name == selectedName);
             return match?.Path;
         }
+    }
+
+    private static string? PickWorktreeDirectory(string basePath)
+    {
+        // Collect leaf directories: basePath/{branch}/{repo}
+        var entries = new List<(string Label, string Path)>();
+        foreach (var branchDir in Directory.GetDirectories(basePath).OrderBy(d => d))
+        {
+            var branch = System.IO.Path.GetFileName(branchDir);
+            var repoDirs = Directory.GetDirectories(branchDir);
+            if (repoDirs.Length == 0)
+            {
+                // Branch dir itself (no repo subdirs)
+                entries.Add((branch, branchDir));
+                continue;
+            }
+
+            foreach (var repoDir in repoDirs.OrderBy(d => d))
+            {
+                var repo = System.IO.Path.GetFileName(repoDir);
+                entries.Add(($"{branch}/{repo}", repoDir));
+            }
+        }
+
+        if (entries.Count == 0)
+            return null;
+
+        var prompt = new SelectionPrompt<string>()
+            .Title("[grey70]Pick a worktree[/]")
+            .PageSize(15)
+            .HighlightStyle(new Style(Color.White, Color.Grey70))
+            .MoreChoicesText("[grey](Move up and down to reveal more)[/]");
+
+        foreach (var (label, path) in entries)
+            prompt.AddChoice($"{label}  [grey50]{path}[/]");
+
+        prompt.AddChoice(CancelChoice);
+
+        var selected = AnsiConsole.Prompt(prompt);
+        if (selected == CancelChoice)
+            return null;
+
+        // Extract path from the selection
+        var parts = selected.Split("  ", 2);
+        return parts.Length > 1 ? Markup.Remove(parts[1]) : null;
     }
 
     /// <summary>
