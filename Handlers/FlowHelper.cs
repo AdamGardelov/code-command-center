@@ -455,21 +455,28 @@ public class FlowHelper(CccConfig config)
 
     private static string? PickWorktreeDirectory(string basePath)
     {
-        // Collect leaf directories: basePath/{branch}/{repo}
+        // Collect git worktree directories: basePath/{branch}/{repo}
+        // Only include directories that are git repos/worktrees (.git file or directory)
         var entries = new List<(string Label, string Path)>();
         foreach (var branchDir in Directory.GetDirectories(basePath).OrderBy(d => d))
         {
             var branch = System.IO.Path.GetFileName(branchDir);
-            var repoDirs = Directory.GetDirectories(branchDir);
-            if (repoDirs.Length == 0)
+
+            // Check if the branch dir itself is a git worktree
+            if (Directory.Exists(System.IO.Path.Combine(branchDir, ".git"))
+                || File.Exists(System.IO.Path.Combine(branchDir, ".git")))
             {
-                // Branch dir itself (no repo subdirs)
                 entries.Add((branch, branchDir));
                 continue;
             }
 
-            foreach (var repoDir in repoDirs.OrderBy(d => d))
+            // Check subdirectories for git repos/worktrees
+            foreach (var repoDir in Directory.GetDirectories(branchDir).OrderBy(d => d))
             {
+                if (!Directory.Exists(System.IO.Path.Combine(repoDir, ".git"))
+                    && !File.Exists(System.IO.Path.Combine(repoDir, ".git")))
+                    continue;
+
                 var repo = System.IO.Path.GetFileName(repoDir);
                 entries.Add(($"{branch}/{repo}", repoDir));
             }
