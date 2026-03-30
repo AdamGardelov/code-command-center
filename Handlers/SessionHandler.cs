@@ -323,6 +323,10 @@ public class SessionHandler(
                 ConfigService.RenameStartCommit(config, currentName, newName);
                 ConfigService.RenameRemoteHost(config, currentName, newName);
                 ConfigService.RenameSkipPermissions(config, currentName, newName);
+
+                if (state.EmbeddedSessionName == currentName)
+                    state.SetEmbedded(newName);
+
                 currentName = newName;
                 changed = true;
             }
