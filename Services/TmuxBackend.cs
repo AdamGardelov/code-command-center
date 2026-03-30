@@ -480,6 +480,79 @@ public class TmuxBackend : ISessionBackend
         catch { }
     }
 
+    public async Task EmbedSession(string sessionName)
+    {
+        // Get current right pane ID (placeholder or welcome shell)
+        var currentRight = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
+
+        // Join the pool window's pane into the manager
+        var (success, error) = RunTmuxWithError("join-pane", "-h", "-l", "75%",
+            "-s", $"{PoolSession}:{sessionName}:0.0",
+            "-t", $"{ManagerSession}:0");
+
+        if (!success) return;
+
+        // Kill the old right pane (placeholder shell)
+        if (!string.IsNullOrEmpty(currentRight))
+            RunTmux("kill-pane", "-t", currentRight);
+
+        RunTmux("select-pane", "-t", ManagerNavPane);
+        await Task.CompletedTask;
+    }
+
+    public async Task UnembedSession(string sessionName)
+    {
+        // Create a placeholder window in pool, then move the embedded pane into it
+        RunTmux("new-window", "-t", PoolSession, "-n", sessionName);
+
+        var paneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
+        if (string.IsNullOrEmpty(paneId)) return;
+
+        var placeholderPaneId = RunTmux("display-message", "-t", $"{PoolSession}:{sessionName}", "-p", "#{pane_id}");
+
+        RunTmux("join-pane", "-s", paneId, "-t", $"{PoolSession}:{sessionName}");
+
+        if (!string.IsNullOrEmpty(placeholderPaneId))
+            RunTmux("kill-pane", "-t", placeholderPaneId);
+
+        // Create new placeholder shell in manager right side
+        RunTmux("split-window", "-t", $"{ManagerSession}:0", "-h", "-l", "75%");
+        RunTmux("select-pane", "-t", ManagerNavPane);
+        await Task.CompletedTask;
+    }
+
+    public async Task SwapEmbeddedSession(string oldName, string newName)
+    {
+        var currentPaneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
+        if (string.IsNullOrEmpty(currentPaneId)) return;
+
+        // Move old session back to pool
+        RunTmux("new-window", "-t", PoolSession, "-n", oldName);
+        var placeholderPaneId = RunTmux("display-message", "-t", $"{PoolSession}:{oldName}", "-p", "#{pane_id}");
+        RunTmux("join-pane", "-s", currentPaneId, "-t", $"{PoolSession}:{oldName}");
+        if (!string.IsNullOrEmpty(placeholderPaneId))
+            RunTmux("kill-pane", "-t", placeholderPaneId);
+
+        // Move new session from pool into manager
+        var shellPaneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
+        RunTmux("join-pane", "-h", "-l", "75%",
+            "-s", $"{PoolSession}:{newName}:0.0",
+            "-t", $"{ManagerSession}:0");
+        if (!string.IsNullOrEmpty(shellPaneId))
+            RunTmux("kill-pane", "-t", shellPaneId);
+
+        RunTmux("select-pane", "-t", ManagerNavPane);
+        await Task.CompletedTask;
+    }
+
+    public string? GetEmbeddedSessionName()
+    {
+        var envName = RunTmux("show-environment", "-t", ManagerSessionPane, "CCC_SESSION_NAME");
+        if (envName != null && envName.StartsWith("CCC_SESSION_NAME="))
+            return envName["CCC_SESSION_NAME=".Length..];
+        return null;
+    }
+
     public void Dispose()
     {
         // No-op — tmux sessions persist independently of CCC
