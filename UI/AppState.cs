@@ -41,6 +41,11 @@ public class AppState
     public bool IsSettingsRebinding { get; set; }
     public string SettingsEditBuffer { get; set; } = "";
 
+    // Embedded session state
+    public string? EmbeddedSessionName { get; set; }
+    public bool IsEmbeddedGridMode { get; set; }
+    public List<string> GridEmbeddedSessionNames { get; set; } = [];
+
     // Diff overlay state
     public int DiffScrollOffset { get; set; }
     public string[] DiffOverlayLines { get; set; } = [];
@@ -337,6 +342,23 @@ public class AppState
         ActiveGroup = null;
         CursorIndex = _savedCursorIndex;
         ClampCursor();
+    }
+
+    public void SetEmbedded(string? sessionName)
+    {
+        EmbeddedSessionName = sessionName;
+    }
+
+    public void EnterEmbeddedGrid(List<string> sessionNames)
+    {
+        IsEmbeddedGridMode = true;
+        GridEmbeddedSessionNames = sessionNames;
+    }
+
+    public void LeaveEmbeddedGrid()
+    {
+        IsEmbeddedGridMode = false;
+        GridEmbeddedSessionNames.Clear();
     }
 
     public void SetStatus(string message)
