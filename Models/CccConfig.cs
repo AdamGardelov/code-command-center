@@ -21,4 +21,6 @@ public class CccConfig
     public HashSet<string> SkipPermissionsSessions { get; set; } = [];
     public string PrReviewLanguage { get; set; } = "en";
     public bool PrIncludeDrafts { get; set; }
+    public string FocusKeybinding { get; set; } = "C-Space";
+    public bool MouseEnabled { get; set; } = true;
 }
