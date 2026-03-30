@@ -15,7 +15,7 @@ public class SessionHandler(
     Action render,
     Action resetPaneCache)
 {
-    public void Create(bool claudeAvailable, string? preSelectRemote = null)
+    public void Create(bool claudeAvailable, string? preSelectRemote = null, bool embedAfterCreate = true)
     {
         if (!claudeAvailable)
         {
@@ -129,10 +129,28 @@ public class SessionHandler(
             var claudeConfigDir = remoteHost == null && !shellOnly
                 ? ConfigService.ResolveClaudeConfigDir(config, dir)
                 : null;
-            var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost?.Name,
-                effectiveSkip, shellOnly: shellOnly);
-            if (error != null)
-                throw new FlowCancelledException(error);
+
+            if (remoteHost != null)
+            {
+                var error = backend.CreateSession(name, dir, claudeConfigDir, remoteHost.Name,
+                    effectiveSkip, shellOnly: shellOnly);
+                if (error != null)
+                    throw new FlowCancelledException(error);
+            }
+            else
+            {
+                backend.CreateSessionInPool(name, dir, claudeConfigDir,
+                    effectiveSkip, initialPrompt: null, shellOnly: shellOnly).GetAwaiter().GetResult();
+
+                if (embedAfterCreate)
+                {
+                    var currentEmbedded = state.EmbeddedSessionName;
+                    if (currentEmbedded != null)
+                        backend.UnembedSession(currentEmbedded).GetAwaiter().GetResult();
+                    backend.EmbedSession(name).GetAwaiter().GetResult();
+                    state.SetEmbedded(name);
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(description))
                 ConfigService.SaveDescription(config, name, description);
@@ -143,8 +161,6 @@ public class SessionHandler(
             if (effectiveSkip && !shellOnly)
                 ConfigService.SetSkipPermissions(config, name, true);
             backend.ApplyStatusColor(name, color ?? "grey42");
-            if (remoteHost == null)
-                backend.AttachSession(name);
             loadSessions();
             resetPaneCache();
         }, state);
@@ -332,6 +348,40 @@ public class SessionHandler(
         if (session == null)
             return;
         AttachSession(session);
+    }
+
+    public void Embed(Session? session = null)
+    {
+        session ??= state.GetSelectedSession();
+        if (session == null)
+            return;
+
+        if (session.RemoteHostName != null || session.IsOffline)
+        {
+            AttachSession(session);
+            return;
+        }
+
+        var currentEmbedded = state.EmbeddedSessionName;
+
+        if (currentEmbedded == session.Name)
+        {
+            state.SetStatus($"Already viewing {session.Name}");
+            return;
+        }
+
+        if (currentEmbedded != null)
+        {
+            backend.SwapEmbeddedSession(currentEmbedded, session.Name).GetAwaiter().GetResult();
+        }
+        else
+        {
+            backend.EmbedSession(session.Name).GetAwaiter().GetResult();
+        }
+
+        state.SetEmbedded(session.Name);
+        state.SetStatus($"Switched to {session.Name}");
+        loadSessions();
     }
 
     private void AttachSession(Session session)
