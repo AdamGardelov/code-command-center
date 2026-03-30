@@ -553,6 +553,75 @@ public class TmuxBackend : ISessionBackend
         return null;
     }
 
+    public async Task EmbedGridSessions(List<string> sessionNames)
+    {
+        if (sessionNames.Count < 2 || sessionNames.Count > 6) return;
+
+        var currentPaneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
+
+        // Move first session in
+        RunTmux("join-pane", "-h", "-l", "75%",
+            "-s", $"{PoolSession}:{sessionNames[0]}:0.0",
+            "-t", $"{ManagerSession}:0");
+
+        if (!string.IsNullOrEmpty(currentPaneId))
+            RunTmux("kill-pane", "-t", currentPaneId);
+
+        // Move remaining sessions in
+        for (int i = 1; i < sessionNames.Count; i++)
+        {
+            RunTmux("join-pane", "-v",
+                "-s", $"{PoolSession}:{sessionNames[i]}:0.0",
+                "-t", $"{ManagerSession}:0");
+        }
+
+        RunTmux("select-layout", "-t", $"{ManagerSession}:0", "tiled");
+
+        var manifest = string.Join(",", sessionNames);
+        RunTmux("set-environment", "-t", ManagerSession, "CCC_GRID_SESSIONS", manifest);
+
+        RunTmux("select-pane", "-t", ManagerNavPane);
+        await Task.CompletedTask;
+    }
+
+    public async Task RestoreGridToSingleEmbed()
+    {
+        var manifestRaw = RunTmux("show-environment", "-t", ManagerSession, "CCC_GRID_SESSIONS");
+        if (manifestRaw == null || !manifestRaw.StartsWith("CCC_GRID_SESSIONS=")) return;
+
+        var sessionNames = manifestRaw["CCC_GRID_SESSIONS=".Length..].Split(',').ToList();
+
+        var paneList = RunTmux("list-panes", "-t", $"{ManagerSession}:0",
+            "-F", "#{pane_index}\t#{pane_id}");
+
+        if (paneList == null) return;
+
+        var panes = paneList.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Split('\t'))
+            .Where(parts => parts.Length == 2)
+            .Select(parts => (Index: int.Parse(parts[0]), PaneId: parts[1]))
+            .OrderByDescending(p => p.Index)
+            .ToList();
+
+        // Move all panes except nav (index 0) and first session (index 1) back to pool
+        foreach (var pane in panes.Where(p => p.Index > 1))
+        {
+            var sessionIndex = pane.Index - 1;
+            if (sessionIndex < sessionNames.Count)
+            {
+                var sessionName = sessionNames[sessionIndex];
+                RunTmux("new-window", "-t", PoolSession, "-n", sessionName);
+                var placeholder = RunTmux("display-message", "-t", $"{PoolSession}:{sessionName}", "-p", "#{pane_id}");
+                RunTmux("join-pane", "-s", pane.PaneId, "-t", $"{PoolSession}:{sessionName}");
+                if (!string.IsNullOrEmpty(placeholder))
+                    RunTmux("kill-pane", "-t", placeholder);
+            }
+        }
+
+        RunTmux("set-environment", "-u", "-t", ManagerSession, "CCC_GRID_SESSIONS");
+        await Task.CompletedTask;
+    }
+
     public void Dispose()
     {
         // No-op — tmux sessions persist independently of CCC
