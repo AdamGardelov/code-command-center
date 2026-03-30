@@ -592,21 +592,66 @@ public class TmuxBackend : ISessionBackend
         catch { }
     }
 
+    /// <summary>
+    /// Get the pane ID of the nav pane (first pane created in the manager, running CCC).
+    /// </summary>
+    private string? GetNavPaneId()
+    {
+        return RunTmux("display-message", "-t", ManagerNavPane, "-p", "#{pane_id}");
+    }
+
+    /// <summary>
+    /// Kill all panes in the manager window except the nav pane.
+    /// </summary>
+    private void KillNonNavPanes()
+    {
+        var navPaneId = GetNavPaneId();
+        if (string.IsNullOrEmpty(navPaneId)) return;
+
+        var paneList = RunTmux("list-panes", "-t", $"{ManagerSession}:0", "-F", "#{pane_id}");
+        if (paneList == null) return;
+
+        foreach (var paneId in paneList.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (paneId != navPaneId)
+                RunTmux("kill-pane", "-t", paneId);
+        }
+    }
+
+    /// <summary>
+    /// Move a pane from the manager back to a pool window.
+    /// </summary>
+    private void MoveEmbeddedPaneToPool(string sessionName)
+    {
+        var navPaneId = GetNavPaneId();
+
+        // Find the embedded pane (any pane that isn't nav)
+        var paneList = RunTmux("list-panes", "-t", $"{ManagerSession}:0", "-F", "#{pane_id}");
+        if (paneList == null) return;
+
+        var embeddedPaneId = paneList.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(id => id != navPaneId);
+        if (embeddedPaneId == null) return;
+
+        // Create target window in pool and move the pane there
+        RunTmux("new-window", "-t", PoolSession, "-n", sessionName);
+        var placeholderPaneId = RunTmux("display-message", "-t", $"{PoolSession}:{sessionName}", "-p", "#{pane_id}");
+        RunTmux("join-pane", "-s", embeddedPaneId, "-t", $"{PoolSession}:{sessionName}");
+        if (!string.IsNullOrEmpty(placeholderPaneId))
+            RunTmux("kill-pane", "-t", placeholderPaneId);
+    }
+
     public Task EmbedSession(string sessionName)
     {
-        // Get current right pane ID (placeholder or welcome shell)
-        var currentRight = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
+        // Kill all non-nav panes (placeholder shells, leftover panes)
+        KillNonNavPanes();
 
-        // Join the pool window's pane into the manager
-        var (success, error) = RunTmuxWithError("join-pane", "-h", "-l", "75%",
+        // Join the pool window's pane into the manager next to the nav pane
+        var (success, _) = RunTmuxWithError("join-pane", "-h", "-l", "75%",
             "-s", $"{PoolSession}:{sessionName}.0",
-            "-t", $"{ManagerSession}:0");
+            "-t", ManagerNavPane);
 
         if (!success) return Task.CompletedTask;
-
-        // Kill the old right pane (placeholder shell)
-        if (!string.IsNullOrEmpty(currentRight))
-            RunTmux("kill-pane", "-t", currentRight);
 
         RunTmux("select-pane", "-t", ManagerNavPane);
         return Task.CompletedTask;
@@ -614,47 +659,18 @@ public class TmuxBackend : ISessionBackend
 
     public Task UnembedSession(string sessionName)
     {
-        // Create a placeholder window in pool, then move the embedded pane into it
-        RunTmux("new-window", "-t", PoolSession, "-n", sessionName);
-
-        var paneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
-        if (string.IsNullOrEmpty(paneId)) return Task.CompletedTask;
-
-        var placeholderPaneId = RunTmux("display-message", "-t", $"{PoolSession}:{sessionName}", "-p", "#{pane_id}");
-
-        RunTmux("join-pane", "-s", paneId, "-t", $"{PoolSession}:{sessionName}");
-
-        if (!string.IsNullOrEmpty(placeholderPaneId))
-            RunTmux("kill-pane", "-t", placeholderPaneId);
-
-        // Create new placeholder shell in manager right side
-        RunTmux("split-window", "-t", $"{ManagerSession}:0", "-h", "-l", "75%");
-        RunTmux("select-pane", "-t", ManagerNavPane);
+        MoveEmbeddedPaneToPool(sessionName);
+        // Manager now has only the nav pane — next EmbedSession will add the split
         return Task.CompletedTask;
     }
 
     public Task SwapEmbeddedSession(string oldName, string newName)
     {
-        var currentPaneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
-        if (string.IsNullOrEmpty(currentPaneId)) return Task.CompletedTask;
-
         // Move old session back to pool
-        RunTmux("new-window", "-t", PoolSession, "-n", oldName);
-        var placeholderPaneId = RunTmux("display-message", "-t", $"{PoolSession}:{oldName}", "-p", "#{pane_id}");
-        RunTmux("join-pane", "-s", currentPaneId, "-t", $"{PoolSession}:{oldName}");
-        if (!string.IsNullOrEmpty(placeholderPaneId))
-            RunTmux("kill-pane", "-t", placeholderPaneId);
+        MoveEmbeddedPaneToPool(oldName);
 
-        // Move new session from pool into manager
-        var shellPaneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
-        RunTmux("join-pane", "-h", "-l", "75%",
-            "-s", $"{PoolSession}:{newName}.0",
-            "-t", $"{ManagerSession}:0");
-        if (!string.IsNullOrEmpty(shellPaneId))
-            RunTmux("kill-pane", "-t", shellPaneId);
-
-        RunTmux("select-pane", "-t", ManagerNavPane);
-        return Task.CompletedTask;
+        // Now embed the new session (KillNonNavPanes handles cleanup)
+        return EmbedSession(newName);
     }
 
     public string? GetEmbeddedSessionName()
