@@ -599,7 +599,7 @@ public class TmuxBackend : ISessionBackend
 
         // Join the pool window's pane into the manager
         var (success, error) = RunTmuxWithError("join-pane", "-h", "-l", "75%",
-            "-s", $"{PoolSession}:{sessionName}:0.0",
+            "-s", $"{PoolSession}:{sessionName}.0",
             "-t", $"{ManagerSession}:0");
 
         if (!success) return Task.CompletedTask;
@@ -648,7 +648,7 @@ public class TmuxBackend : ISessionBackend
         // Move new session from pool into manager
         var shellPaneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
         RunTmux("join-pane", "-h", "-l", "75%",
-            "-s", $"{PoolSession}:{newName}:0.0",
+            "-s", $"{PoolSession}:{newName}.0",
             "-t", $"{ManagerSession}:0");
         if (!string.IsNullOrEmpty(shellPaneId))
             RunTmux("kill-pane", "-t", shellPaneId);
@@ -673,7 +673,7 @@ public class TmuxBackend : ISessionBackend
 
         // Move first session in
         RunTmux("join-pane", "-h", "-l", "75%",
-            "-s", $"{PoolSession}:{sessionNames[0]}:0.0",
+            "-s", $"{PoolSession}:{sessionNames[0]}.0",
             "-t", $"{ManagerSession}:0");
 
         if (!string.IsNullOrEmpty(currentPaneId))
@@ -683,7 +683,7 @@ public class TmuxBackend : ISessionBackend
         for (int i = 1; i < sessionNames.Count; i++)
         {
             RunTmux("join-pane", "-v",
-                "-s", $"{PoolSession}:{sessionNames[i]}:0.0",
+                "-s", $"{PoolSession}:{sessionNames[i]}.0",
                 "-t", $"{ManagerSession}:0");
         }
 
