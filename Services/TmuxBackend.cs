@@ -471,17 +471,17 @@ public class TmuxBackend : ISessionBackend
         return result;
     }
 
-    public async Task SetupPool()
+    public Task SetupPool()
     {
         var (exists, _) = RunTmuxWithError("has-session", "-t", $"={PoolSession}");
-        if (exists) return;
+        if (exists) return Task.CompletedTask;
         RunTmux("new-session", "-d", "-s", PoolSession, "-n", "placeholder");
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
-    public async Task MigrateStandaloneSessionsToPool(List<Session> standaloneSessions)
+    public Task MigrateStandaloneSessionsToPool(List<Session> standaloneSessions)
     {
-        await SetupPool();
+        SetupPool();
 
         foreach (var session in standaloneSessions)
         {
@@ -505,9 +505,10 @@ public class TmuxBackend : ISessionBackend
 
         // Clean up placeholder if real sessions were imported
         RunTmux("kill-window", "-t", $"{PoolSession}:placeholder");
+        return Task.CompletedTask;
     }
 
-    public async Task CreateSessionInPool(string name, string dir, string? claudeConfigDir = null,
+    public Task CreateSessionInPool(string name, string dir, string? claudeConfigDir = null,
         bool dangerouslySkipPermissions = false, string? initialPrompt = null,
         bool shellOnly = false)
     {
@@ -529,7 +530,7 @@ public class TmuxBackend : ISessionBackend
         // Remove the placeholder window if it still exists (first session created)
         RunTmux("kill-window", "-t", $"{PoolSession}:placeholder");
 
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public bool IsInsideManager()
@@ -546,11 +547,11 @@ public class TmuxBackend : ISessionBackend
         return exists;
     }
 
-    public async Task SetupManagerSession(string executablePath, string focusKeybinding = "C-Space",
+    public Task SetupManagerSession(string executablePath, string focusKeybinding = "C-Space",
         bool mouseEnabled = true)
     {
         var (exists, _) = RunTmuxWithError("has-session", "-t", $"={ManagerSession}");
-        if (exists) return;
+        if (exists) return Task.CompletedTask;
 
         RunTmux("new-session", "-d", "-s", ManagerSession, "-n", "main",
             "-x", Console.WindowWidth.ToString(), "-y", Console.WindowHeight.ToString(),
@@ -569,7 +570,7 @@ public class TmuxBackend : ISessionBackend
 
         RunTmux("set", "-t", ManagerSession, "status", "off");
 
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public void AttachManagerSession()
@@ -591,7 +592,7 @@ public class TmuxBackend : ISessionBackend
         catch { }
     }
 
-    public async Task EmbedSession(string sessionName)
+    public Task EmbedSession(string sessionName)
     {
         // Get current right pane ID (placeholder or welcome shell)
         var currentRight = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
@@ -601,23 +602,23 @@ public class TmuxBackend : ISessionBackend
             "-s", $"{PoolSession}:{sessionName}:0.0",
             "-t", $"{ManagerSession}:0");
 
-        if (!success) return;
+        if (!success) return Task.CompletedTask;
 
         // Kill the old right pane (placeholder shell)
         if (!string.IsNullOrEmpty(currentRight))
             RunTmux("kill-pane", "-t", currentRight);
 
         RunTmux("select-pane", "-t", ManagerNavPane);
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
-    public async Task UnembedSession(string sessionName)
+    public Task UnembedSession(string sessionName)
     {
         // Create a placeholder window in pool, then move the embedded pane into it
         RunTmux("new-window", "-t", PoolSession, "-n", sessionName);
 
         var paneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
-        if (string.IsNullOrEmpty(paneId)) return;
+        if (string.IsNullOrEmpty(paneId)) return Task.CompletedTask;
 
         var placeholderPaneId = RunTmux("display-message", "-t", $"{PoolSession}:{sessionName}", "-p", "#{pane_id}");
 
@@ -629,13 +630,13 @@ public class TmuxBackend : ISessionBackend
         // Create new placeholder shell in manager right side
         RunTmux("split-window", "-t", $"{ManagerSession}:0", "-h", "-l", "75%");
         RunTmux("select-pane", "-t", ManagerNavPane);
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
-    public async Task SwapEmbeddedSession(string oldName, string newName)
+    public Task SwapEmbeddedSession(string oldName, string newName)
     {
         var currentPaneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
-        if (string.IsNullOrEmpty(currentPaneId)) return;
+        if (string.IsNullOrEmpty(currentPaneId)) return Task.CompletedTask;
 
         // Move old session back to pool
         RunTmux("new-window", "-t", PoolSession, "-n", oldName);
@@ -653,7 +654,7 @@ public class TmuxBackend : ISessionBackend
             RunTmux("kill-pane", "-t", shellPaneId);
 
         RunTmux("select-pane", "-t", ManagerNavPane);
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public string? GetEmbeddedSessionName()
@@ -664,9 +665,9 @@ public class TmuxBackend : ISessionBackend
         return null;
     }
 
-    public async Task EmbedGridSessions(List<string> sessionNames)
+    public Task EmbedGridSessions(List<string> sessionNames)
     {
-        if (sessionNames.Count < 2 || sessionNames.Count > 6) return;
+        if (sessionNames.Count < 2 || sessionNames.Count > 6) return Task.CompletedTask;
 
         var currentPaneId = RunTmux("display-message", "-t", ManagerSessionPane, "-p", "#{pane_id}");
 
@@ -692,20 +693,20 @@ public class TmuxBackend : ISessionBackend
         RunTmux("set-environment", "-t", ManagerSession, "CCC_GRID_SESSIONS", manifest);
 
         RunTmux("select-pane", "-t", ManagerNavPane);
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
-    public async Task RestoreGridToSingleEmbed()
+    public Task RestoreGridToSingleEmbed()
     {
         var manifestRaw = RunTmux("show-environment", "-t", ManagerSession, "CCC_GRID_SESSIONS");
-        if (manifestRaw == null || !manifestRaw.StartsWith("CCC_GRID_SESSIONS=")) return;
+        if (manifestRaw == null || !manifestRaw.StartsWith("CCC_GRID_SESSIONS=")) return Task.CompletedTask;
 
         var sessionNames = manifestRaw["CCC_GRID_SESSIONS=".Length..].Split(',').ToList();
 
         var paneList = RunTmux("list-panes", "-t", $"{ManagerSession}:0",
             "-F", "#{pane_index}\t#{pane_id}");
 
-        if (paneList == null) return;
+        if (paneList == null) return Task.CompletedTask;
 
         var panes = paneList.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Split('\t'))
@@ -730,7 +731,7 @@ public class TmuxBackend : ISessionBackend
         }
 
         RunTmux("set-environment", "-u", "-t", ManagerSession, "CCC_GRID_SESSIONS");
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public void Dispose()

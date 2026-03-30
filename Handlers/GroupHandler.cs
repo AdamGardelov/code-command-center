@@ -32,6 +32,14 @@ public class GroupHandler(
         var confirm = Console.ReadKey(true);
         if (confirm.Key == ConsoleKey.Y)
         {
+            // Unembed if any group session is currently embedded
+            var embeddedName = state.EmbeddedSessionName;
+            if (embeddedName != null && group.Sessions.Any(s => s == embeddedName))
+            {
+                backend.UnembedSession(embeddedName).GetAwaiter().GetResult();
+                state.SetEmbedded(null);
+            }
+
             foreach (var sessionName in group.Sessions.ToList())
             {
                 backend.KillSession(sessionName);
@@ -45,6 +53,18 @@ public class GroupHandler(
 
             ConfigService.RemoveGroup(config, group.Name);
             loadSessions();
+
+            // Auto-embed next available session
+            if (state.EmbeddedSessionName == null)
+            {
+                var nextSession = state.Sessions.FirstOrDefault(s => s.IsPoolSession && !s.IsDead);
+                if (nextSession != null)
+                {
+                    backend.EmbedSession(nextSession.Name).GetAwaiter().GetResult();
+                    state.SetEmbedded(nextSession.Name);
+                }
+            }
+
             state.SetStatus("Group deleted");
         }
         else
