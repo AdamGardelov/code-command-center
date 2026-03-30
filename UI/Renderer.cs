@@ -21,8 +21,8 @@ public static class Renderer
         if (state.MobileMode)
             return BuildMobileLayout(state);
 
-        // If we're in sidebar mode (embedded session), render nav-only layout
-        if (state.EmbeddedSessionName != null || state.IsEmbeddedGridMode)
+        // If we're in sidebar mode (inside manager), render nav-only layout
+        if (state.IsSidebarMode)
         {
             var sidebar = new Layout("Root")
                 .SplitRows(

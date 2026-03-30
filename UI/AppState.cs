@@ -16,6 +16,9 @@ public class AppState
     private string? StatusMessage { get; set; }
     private DateTime? StatusMessageTime { get; set; }
 
+    // Sidebar mode
+    public bool IsSidebarMode { get; set; }
+
     // Group state
     public List<SessionGroup> Groups { get; set; } = [];
     public HashSet<string> ExpandedGroups { get; set; } = [];

@@ -72,6 +72,9 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
             return;
         }
 
+        // We're inside the manager — enable sidebar mode
+        _state.IsSidebarMode = true;
+
         _flow = new FlowHelper(_config);
         _diffHandler = new DiffHandler(_state);
         _settingsHandler = new SettingsHandler(_state, _config, Render, RefreshKeybindings);
