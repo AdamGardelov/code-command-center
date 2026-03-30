@@ -58,11 +58,19 @@ public static class KeyBindingService
         },
         new()
         {
+            ActionId = "create-background",
+            Key = "C",
+            Label = "bg new",
+            CanDisable = true,
+            StatusBarOrder = 21
+        },
+        new()
+        {
             ActionId = "new-group",
             Key = "g",
             Label = "group",
             CanDisable = true,
-            StatusBarOrder = 21
+            StatusBarOrder = 22
         },
         new()
         {
@@ -70,7 +78,7 @@ public static class KeyBindingService
             Key = "e",
             Label = "edit",
             CanDisable = true,
-            StatusBarOrder = 22
+            StatusBarOrder = 23
         },
         new()
         {
@@ -78,7 +86,7 @@ public static class KeyBindingService
             Key = "d",
             Label = "del",
             CanDisable = true,
-            StatusBarOrder = 23
+            StatusBarOrder = 24
         },
         new()
         {
@@ -86,7 +94,7 @@ public static class KeyBindingService
             Key = "x",
             Label = "hide",
             CanDisable = true,
-            StatusBarOrder = 24
+            StatusBarOrder = 25
         },
         new()
         {
@@ -94,7 +102,7 @@ public static class KeyBindingService
             Key = "m",
             Label = "move",
             CanDisable = true,
-            StatusBarOrder = 25
+            StatusBarOrder = 26
         },
         new()
         {
@@ -102,7 +110,7 @@ public static class KeyBindingService
             Key = "a",
             Label = "adopt",
             CanDisable = true,
-            StatusBarOrder = 26
+            StatusBarOrder = 27
         },
         new()
         {
@@ -110,7 +118,7 @@ public static class KeyBindingService
             Key = "p",
             Label = "review",
             CanDisable = true,
-            StatusBarOrder = 27
+            StatusBarOrder = 28
         },
         // Group 3: Open (navigate to things)
         new()

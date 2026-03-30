@@ -581,7 +581,11 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
                     var sessionName = _groupHandler.CreateRepoSession(
                         ri.GroupName, ri.RepoName, ri.RepoPath, _claudeAvailable);
                     if (sessionName != null)
-                        _sessionHandler.Attach(sessionName);
+                    {
+                        var created = _state.Sessions.FirstOrDefault(s => s.Name == sessionName);
+                        if (created != null)
+                            _sessionHandler.Embed(created);
+                    }
                 }
                 return;
             }
@@ -612,12 +616,16 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
                 switch (actionId)
                 {
                     case "attach":
-                        // Enter on worktree group = open/attach root session
+                        // Enter on worktree group = open/embed root session
                         if (!string.IsNullOrEmpty(gh.Group.WorktreePath))
                         {
                             var rootSession = _groupHandler.OpenWorktreeSession(_claudeAvailable);
                             if (rootSession != null)
-                                _sessionHandler.Attach(rootSession);
+                            {
+                                var ws = _state.Sessions.FirstOrDefault(s => s.Name == rootSession);
+                                if (ws != null)
+                                    _sessionHandler.Embed(ws);
+                            }
                         }
                         else
                         {
@@ -667,7 +675,7 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
                 _sessionHandler.SendText();
                 break;
             case "attach":
-                _sessionHandler.Attach();
+                _sessionHandler.Embed();
                 break;
             case "toggle-diff":
                 _diffHandler.Open();
@@ -677,6 +685,9 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
                 break;
             case "new-session":
                 _sessionHandler.Create(_claudeAvailable);
+                break;
+            case "create-background":
+                _sessionHandler.Create(_claudeAvailable, embedAfterCreate: false);
                 break;
             case "new-group":
                 _groupHandler.CreateNew(_claudeAvailable);
@@ -860,7 +871,7 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
                 _sessionHandler.SendText();
                 break;
             case "attach":
-                _sessionHandler.Attach();
+                _sessionHandler.Embed();
                 break;
             case "refresh":
                 LoadSessions();
@@ -936,24 +947,37 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
 
         var sessionNames = gridSessions.Select(s => s.Name).ToList();
 
-        // Create the grid session with native tmux panes
-        var error = backend.CreateGridSession(sessionNames);
-        if (error != null)
+        if (_state.IsEmbeddedGridMode)
         {
+            // Exit grid mode
+            backend.RestoreGridToSingleEmbed().GetAwaiter().GetResult();
+            _state.LeaveEmbeddedGrid();
+            // Re-embed the first session
+            if (gridSessions.Count > 0)
+            {
+                backend.EmbedSession(gridSessions[0].Name).GetAwaiter().GetResult();
+                _state.SetEmbedded(gridSessions[0].Name);
+            }
+
             if (groupName != null)
                 _state.LeaveGroupGrid();
-            _state.SetStatus(error);
-            return;
+
+            _state.SetStatus("Exited grid view");
         }
+        else
+        {
+            // Enter grid mode — unembed current, embed grid
+            var currentEmbedded = _state.EmbeddedSessionName;
+            if (currentEmbedded != null)
+            {
+                backend.UnembedSession(currentEmbedded).GetAwaiter().GetResult();
+                _state.SetEmbedded(null);
+            }
 
-        // Attach to the grid session — blocks CCC main loop
-        backend.AttachSession("ccc-grid");
-
-        // User has detached — restore panes to original sessions
-        backend.RestoreFromGrid();
-
-        if (groupName != null)
-            _state.LeaveGroupGrid();
+            backend.EmbedGridSessions(sessionNames).GetAwaiter().GetResult();
+            _state.EnterEmbeddedGrid(sessionNames);
+            _state.SetStatus($"Grid view: {sessionNames.Count} sessions");
+        }
 
         _lastSelectedSession = null;
         LoadSessions();
