@@ -25,7 +25,8 @@ try
     // Router is the single ISessionBackend used by App
     var routedBackend = new BackendRouter(localBackend, remotes, config);
 
-    var app = new App(routedBackend, config, mobile);
+    var executablePath = Environment.ProcessPath ?? "ccc";
+    var app = new App(routedBackend, config, executablePath, mobile);
     app.Run();
 }
 catch (Exception ex)

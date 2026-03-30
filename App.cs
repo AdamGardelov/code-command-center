@@ -8,7 +8,7 @@ using Spectre.Console;
 
 namespace CodeCommandCenter;
 
-public class App(ISessionBackend backend, CccConfig config, bool mobileMode = false)
+public class App(ISessionBackend backend, CccConfig config, string executablePath, bool mobileMode = false)
 {
     private readonly AppState _state = new()
     {
@@ -16,6 +16,7 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
     };
 
     private readonly CccConfig _config = config;
+    private readonly string _executablePath = executablePath;
     private FlowHelper _flow = null!;
     private DiffHandler _diffHandler = null!;
     private SettingsHandler _settingsHandler = null!;
@@ -50,6 +51,24 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
         {
             AnsiConsole.MarkupLine("[red]CodeCommandCenter should run outside the session host.[/]");
             AnsiConsole.MarkupLine("[grey]It manages sessions from the outside. Exit tmux first.[/]");
+            return;
+        }
+
+        // Sidebar mode bootstrap: if not inside manager, set up and attach
+        if (!backend.IsInsideManager())
+        {
+            backend.SetupPool().GetAwaiter().GetResult();
+            if (backend.ManagerSessionExists())
+            {
+                // Manager exists from previous run — just reattach
+                backend.AttachManagerSession();
+            }
+            else
+            {
+                backend.SetupManagerSession(_executablePath, _config.FocusKeybinding, _config.MouseEnabled)
+                    .GetAwaiter().GetResult();
+                backend.AttachManagerSession();
+            }
             return;
         }
 
@@ -96,6 +115,15 @@ public class App(ISessionBackend backend, CccConfig config, bool mobileMode = fa
         LoadSessions();
         _lastSessionLoad = DateTime.UtcNow;
         _updateCheck = UpdateChecker.CheckForUpdateAsync();
+
+        // Auto-embed first local session if available
+        var localSessions = _state.Sessions.Where(s => s.IsPoolSession && !s.IsDead).ToList();
+        if (localSessions.Count > 0)
+        {
+            var first = localSessions[0];
+            backend.EmbedSession(first.Name).GetAwaiter().GetResult();
+            _state.SetEmbedded(first.Name);
+        }
 
         try
         {
