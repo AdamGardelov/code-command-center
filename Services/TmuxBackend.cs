@@ -137,12 +137,22 @@ public class TmuxBackend : ISessionBackend
 
     public string? KillSession(string name)
     {
+        // Try killing as a pool window first
+        var (poolSuccess, _) = RunTmuxWithError("kill-window", "-t", $"{PoolSession}:{name}");
+        if (poolSuccess) return null;
+
+        // Fall back to killing as a standalone session
         var (success, error) = RunTmuxWithError("kill-session", "-t", name);
         return success ? null : error ?? "Failed to kill session";
     }
 
     public string? RenameSession(string oldName, string newName)
     {
+        // Try renaming as a pool window first
+        var (poolSuccess, _) = RunTmuxWithError("rename-window", "-t", $"{PoolSession}:{oldName}", newName);
+        if (poolSuccess) return null;
+
+        // Fall back to renaming as a standalone session
         var (success, error) = RunTmuxWithError("rename-session", "-t", oldName, newName);
         return success ? null : error ?? "Failed to rename session";
     }
@@ -174,19 +184,22 @@ public class TmuxBackend : ISessionBackend
 
     public string? SendKeys(string sessionName, string text)
     {
-        var (success, error) = RunTmuxWithError("send-keys", "-t", sessionName, "-l", text);
+        var target = ResolveTarget(sessionName);
+        var (success, error) = RunTmuxWithError("send-keys", "-t", target, "-l", text);
         if (!success)
             return error ?? "Failed to send keys";
 
-        RunTmux("send-keys", "-t", sessionName, "Enter");
+        RunTmux("send-keys", "-t", target, "Enter");
         return null;
     }
 
     public void ForwardKey(string sessionName, ConsoleKeyInfo key)
     {
+        var target = ResolveTarget(sessionName);
+
         if (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key >= ConsoleKey.A && key.Key <= ConsoleKey.Z)
         {
-            RunTmux("send-keys", "-t", sessionName, $"C-{(char)('a' + key.Key - ConsoleKey.A)}");
+            RunTmux("send-keys", "-t", target, $"C-{(char)('a' + key.Key - ConsoleKey.A)}");
             return;
         }
 
@@ -223,28 +236,40 @@ public class TmuxBackend : ISessionBackend
 
         if (tmuxKey != null)
         {
-            RunTmux("send-keys", "-t", sessionName, tmuxKey);
+            RunTmux("send-keys", "-t", target, tmuxKey);
             return;
         }
 
         if (key.KeyChar != '\0')
-            RunTmux("send-keys", "-t", sessionName, "-l", key.KeyChar.ToString());
+            RunTmux("send-keys", "-t", target, "-l", key.KeyChar.ToString());
     }
 
     public void ForwardLiteralBatch(string sessionName, string text)
     {
         if (text.Length > 0)
-            RunTmux("send-keys", "-t", sessionName, "-l", text);
+            RunTmux("send-keys", "-t", ResolveTarget(sessionName), "-l", text);
     }
 
-    public string? CapturePaneContent(string sessionName, int lines = 500) =>
-        RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
+    public string? CapturePaneContent(string sessionName, int lines = 500)
+    {
+        // Try pool target first, then standalone
+        var result = RunTmux("capture-pane", "-t", $"{PoolSession}:{sessionName}", "-p", "-e", "-S", $"-{lines}");
+        return result ?? RunTmux("capture-pane", "-t", sessionName, "-p", "-e", "-S", $"-{lines}");
+    }
 
-    public void ResizeWindow(string sessionName, int width, int height) =>
-        RunTmux("resize-window", "-t", sessionName, "-x", width.ToString(), "-y", height.ToString());
+    public void ResizeWindow(string sessionName, int width, int height)
+    {
+        var (poolSuccess, _) = RunTmuxWithError("resize-window", "-t", $"{PoolSession}:{sessionName}", "-x", width.ToString(), "-y", height.ToString());
+        if (!poolSuccess)
+            RunTmux("resize-window", "-t", sessionName, "-x", width.ToString(), "-y", height.ToString());
+    }
 
-    public void ResetWindowSize(string sessionName) =>
-        RunTmux("set-option", "-u", "-t", sessionName, "window-size");
+    public void ResetWindowSize(string sessionName)
+    {
+        var (poolSuccess, _) = RunTmuxWithError("set-option", "-u", "-t", $"{PoolSession}:{sessionName}", "window-size");
+        if (!poolSuccess)
+            RunTmux("set-option", "-u", "-t", sessionName, "window-size");
+    }
 
     public void ApplyStatusColor(string sessionName, string? spectreColor)
     {
@@ -255,7 +280,8 @@ public class TmuxBackend : ISessionBackend
         {
             var color = Style.Parse(spectreColor).Foreground;
             var hex = $"#{color.R:x2}{color.G:x2}{color.B:x2}";
-            RunTmux("set-option", "-t", sessionName, "status-style", $"bg={hex},fg=white");
+            var target = ResolveTarget(sessionName);
+            RunTmux("set-option", "-t", target, "status-style", $"bg={hex},fg=white");
         }
         catch
         {
@@ -712,9 +738,22 @@ public class TmuxBackend : ISessionBackend
         // No-op — tmux sessions persist independently of CCC
     }
 
+    /// <summary>
+    /// Resolves a session name to its tmux target.
+    /// Pool sessions are windows in ccc-pool, standalone sessions are tmux sessions.
+    /// </summary>
+    private string ResolveTarget(string sessionName)
+    {
+        var (poolExists, _) = RunTmuxWithError("list-windows", "-t", PoolSession, "-F", "#{window_name}", "-f", $"#{{==:#{{window_name}},{sessionName}}}");
+        if (poolExists)
+            return $"{PoolSession}:{sessionName}";
+        return sessionName;
+    }
+
     private void DetectWaitingByPaneContent(Session session)
     {
-        var output = RunTmux("capture-pane", "-t", session.Name, "-p", "-S", "-20");
+        var target = ResolveTarget(session.Name);
+        var output = RunTmux("capture-pane", "-t", target, "-p", "-S", "-20");
         if (output == null)
         {
             session.IsWaitingForInput = true;
