@@ -47,20 +47,20 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
             return;
         }
 
-        if (backend.IsInsideHost())
-        {
-            AnsiConsole.MarkupLine("[red]CodeCommandCenter should run outside the session host.[/]");
-            AnsiConsole.MarkupLine("[grey]It manages sessions from the outside. Exit tmux first.[/]");
-            return;
-        }
-
-        // Sidebar mode bootstrap: if not inside manager, set up and attach
+        // Sidebar mode: if already inside manager, skip the "exit tmux" check
         if (!backend.IsInsideManager())
         {
+            if (backend.IsInsideHost())
+            {
+                AnsiConsole.MarkupLine("[red]CodeCommandCenter should run outside the session host.[/]");
+                AnsiConsole.MarkupLine("[grey]It manages sessions from the outside. Exit tmux first.[/]");
+                return;
+            }
+
+            // Bootstrap: set up pool + manager and attach
             backend.SetupPool().GetAwaiter().GetResult();
             if (backend.ManagerSessionExists())
             {
-                // Manager exists from previous run — just reattach
                 backend.AttachManagerSession();
             }
             else
