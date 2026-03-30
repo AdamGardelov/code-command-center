@@ -21,6 +21,22 @@ public static class Renderer
         if (state.MobileMode)
             return BuildMobileLayout(state);
 
+        // If we're in sidebar mode (embedded session), render nav-only layout
+        if (state.EmbeddedSessionName != null || state.IsEmbeddedGridMode)
+        {
+            var sidebar = new Layout("Root")
+                .SplitRows(
+                    new Layout("Header").Size(1),
+                    new Layout("Main"),
+                    new Layout("StatusBar").Size(1));
+
+            sidebar["Header"].Update(BuildHeader(state));
+            sidebar["Main"].Update(BuildSessionPanel(state));
+            sidebar["StatusBar"].Update(BuildStatusBar(state));
+
+            return sidebar;
+        }
+
         var layout = new Layout("Root")
             .SplitRows(
                 new Layout("Header").Size(1),
@@ -719,6 +735,9 @@ public static class Renderer
         var status = state.GetActiveStatus();
         if (status != null)
             return new Markup($" [yellow]{Markup.Escape(status)}[/]");
+
+        if (state.EmbeddedSessionName != null)
+            return new Markup("[grey]⏎ switch │ ^Space focus │ c new │ C bg new │ ^G grid │ q quit[/]");
 
         var visible = state.Keybindings
             .Where(b => b.Enabled && b.Label != null && b.StatusBarOrder >= 0)

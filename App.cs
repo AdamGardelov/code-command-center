@@ -446,6 +446,16 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
                 wasWaiting.TryGetValue(s.Name, out var was) && was != s.IsWaitingForInput);
         }
 
+        // Skip content capture for embedded session (it's a live tmux pane)
+        // But still run waiting-for-input detection for status indicators
+        if (_state.EmbeddedSessionName != null || _state.IsEmbeddedGridMode)
+        {
+            return _state.Sessions.Any(s =>
+                !s.IsExcluded
+                && ((wasWaiting.TryGetValue(s.Name, out var ww) && ww != s.IsWaitingForInput)
+                    || (wasIdle.TryGetValue(s.Name, out var wi) && wi != s.IsIdle)));
+        }
+
         var session = _state.GetSelectedSession();
         var sessionName = session?.Name;
 
@@ -488,6 +498,9 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
 
     private void ResizePreviewPane()
     {
+        // Skip resize for embedded sessions — tmux handles pane sizing
+        if (_state.EmbeddedSessionName != null || _state.IsEmbeddedGridMode) return;
+
         if (_state.ViewMode != ViewMode.List)
             return;
 
