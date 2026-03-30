@@ -6,6 +6,11 @@ namespace CodeCommandCenter.Services;
 
 public class TmuxBackend : ISessionBackend
 {
+    private const string PoolSession = "ccc-pool";
+    private const string ManagerSession = "ccc-manager";
+    private const string ManagerNavPane = "ccc-manager:0.0";  // left pane
+    private const string ManagerSessionPane = "ccc-manager:0.1";  // right pane
+
     public List<Session> ListSessions()
     {
         var output = RunTmux("list-sessions", "-F", "#{session_name}\t#{session_created}\t#{session_attached}\t#{session_windows}\t#{pane_current_path}\t#{pane_dead}");
@@ -381,6 +386,98 @@ public class TmuxBackend : ISessionBackend
         }
 
         return result;
+    }
+
+    public async Task SetupPool()
+    {
+        var (exists, _) = RunTmuxWithError("has-session", "-t", $"={PoolSession}");
+        if (exists) return;
+        RunTmux("new-session", "-d", "-s", PoolSession, "-n", "placeholder");
+        await Task.CompletedTask;
+    }
+
+    public async Task CreateSessionInPool(string name, string dir, string? claudeConfigDir = null,
+        bool dangerouslySkipPermissions = false, string? initialPrompt = null,
+        bool shellOnly = false)
+    {
+        var (cmdFile, cmdArgs) = SshService.BuildSessionCommand(null, dir, dangerouslySkipPermissions, initialPrompt, shellOnly);
+        var quotedArgs = cmdArgs.ConvertAll(a => a.Contains(' ') || a.Contains('&') ? $"\"{a}\"" : a);
+        var shellCommand = $"{cmdFile} {string.Join(" ", quotedArgs)}";
+
+        var args = new List<string> { "new-window", "-t", PoolSession, "-n", name };
+
+        args.AddRange(["-e", $"CCC_SESSION_NAME={name}"]);
+        if (!string.IsNullOrEmpty(claudeConfigDir))
+            args.AddRange(["-e", $"CLAUDE_CONFIG_DIR={claudeConfigDir}"]);
+
+        args.AddRange(["-c", dir, shellCommand]);
+
+        RunTmux(args.ToArray());
+        RunTmux("set-option", "-t", $"{PoolSession}:{name}", "automatic-rename", "off");
+
+        // Remove the placeholder window if it still exists (first session created)
+        RunTmux("kill-window", "-t", $"{PoolSession}:placeholder");
+
+        await Task.CompletedTask;
+    }
+
+    public bool IsInsideManager()
+    {
+        var tmuxEnv = Environment.GetEnvironmentVariable("TMUX");
+        if (string.IsNullOrEmpty(tmuxEnv)) return false;
+        var sessionName = RunTmux("display-message", "-p", "#{session_name}");
+        return sessionName == ManagerSession;
+    }
+
+    public bool ManagerSessionExists()
+    {
+        var (exists, _) = RunTmuxWithError("has-session", "-t", $"={ManagerSession}");
+        return exists;
+    }
+
+    public async Task SetupManagerSession(string executablePath, string focusKeybinding = "C-Space",
+        bool mouseEnabled = true)
+    {
+        var (exists, _) = RunTmuxWithError("has-session", "-t", $"={ManagerSession}");
+        if (exists) return;
+
+        RunTmux("new-session", "-d", "-s", ManagerSession, "-n", "main",
+            "-x", Console.WindowWidth.ToString(), "-y", Console.WindowHeight.ToString(),
+            executablePath);
+
+        RunTmux("split-window", "-t", $"{ManagerSession}:0", "-h", "-l", "75%");
+        RunTmux("select-pane", "-t", ManagerNavPane);
+
+        RunTmux("bind", "-n", focusKeybinding,
+            "if", "-F", $"#{{==:#{{session_name}},{ManagerSession}}}",
+            "select-pane -t {last}",
+            $"send-keys {focusKeybinding}");
+
+        if (mouseEnabled)
+            RunTmux("set", "-t", ManagerSession, "mouse", "on");
+
+        RunTmux("set", "-t", ManagerSession, "status", "off");
+
+        await Task.CompletedTask;
+    }
+
+    public void AttachManagerSession()
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "tmux",
+            UseShellExecute = false,
+        };
+        psi.ArgumentList.Add("attach-session");
+        psi.ArgumentList.Add("-t");
+        psi.ArgumentList.Add(ManagerSession);
+
+        try
+        {
+            var process = Process.Start(psi);
+            process?.WaitForExit();
+        }
+        catch { }
     }
 
     public void Dispose()
