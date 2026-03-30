@@ -39,4 +39,30 @@ public interface ISessionBackend : IDisposable
     bool IsAvailable();
     bool IsInsideHost();
     bool HasClaude();
+
+    // Pool model — sidebar mode
+    Task SetupPool() => Task.CompletedTask;
+    Task CreateSessionInPool(string name, string dir, string? claudeConfigDir = null,
+        bool dangerouslySkipPermissions = false, string? initialPrompt = null,
+        bool shellOnly = false) => Task.CompletedTask;
+
+    // Manager lifecycle
+    Task SetupManagerSession(string executablePath, string focusKeybinding = "C-Space",
+        bool mouseEnabled = true) => Task.CompletedTask;
+    void AttachManagerSession() { }
+    bool IsInsideManager() => false;
+    bool ManagerSessionExists() => false;
+
+    // Embed/unembed
+    Task EmbedSession(string sessionName) => Task.CompletedTask;
+    Task UnembedSession(string sessionName) => Task.CompletedTask;
+    Task SwapEmbeddedSession(string oldName, string newName) => Task.CompletedTask;
+    string? GetEmbeddedSessionName() => null;
+
+    // Grid in manager
+    Task EmbedGridSessions(List<string> sessionNames) => Task.CompletedTask;
+    Task RestoreGridToSingleEmbed() => Task.CompletedTask;
+
+    // Migration
+    Task MigrateStandaloneSessionsToPool(List<Session> standaloneSessions) => Task.CompletedTask;
 }
