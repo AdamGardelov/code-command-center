@@ -18,6 +18,17 @@
 
 A terminal UI for managing multiple Claude Code sessions. Run dozens of Claude agents in parallel, see what they're all doing at a glance, and jump into any session instantly.
 
+## Sidebar Mode
+
+CCC runs inside its own tmux session with a persistent two-pane layout:
+
+- **Left pane** — navigation: session list, groups, preview
+- **Right pane** — the active session, always visible
+
+Navigate with arrow keys and press `Enter` to switch the right pane to any session. Press `Ctrl+Space` (configurable via `focusKeybinding`) to toggle keyboard focus between the nav pane and the active session pane — no attach/detach cycle needed.
+
+Sessions live in a pool managed by CCC. They survive CCC crashes and restarts. Standalone tmux sessions created by previous CCC versions are automatically imported into the pool on first run.
+
 ## Features
 
 - **Live preview** — see each session's terminal output in real-time without attaching
@@ -143,9 +154,11 @@ a manifest stored in a tmux environment variable.
 | `j` / `k` / arrows | Navigate sessions                                                |
 | `Enter`            | Attach to session / open worktree group session / toggle expand on machine header |
 | `Space`            | Toggle expand/collapse group                                     |
-| `Ctrl+G`           | Toggle grid view (group grid when on a grouped session)          |
+| `Ctrl+G`           | Toggle grid view (group grid when on a grouped session; sidebar stays visible) |
 | `D`                | Toggle git diff mode (summary in preview, `Enter` for full diff) |
 | `n`                | Create new session (launches `claude` in a given directory)      |
+| `C`                | Create session in background (no immediate focus switch)         |
+| `Ctrl+Space`       | Toggle focus between nav pane and active session pane            |
 | `g`                | Create new group                                                 |
 | `f`                | Open session directory in file manager                           |
 | `i`                | Open session directory in IDE                                    |
@@ -169,8 +182,7 @@ a manifest stored in a tmux environment variable.
 | `Ctrl+G`          | Exit grid view and restore panes                        |
 | All other keys    | Handled directly by tmux panes                          |
 
-Arrow keys always work for navigation regardless of configuration. When you attach to a session, detach with `Ctrl-b d`
-(standard tmux detach) to return to the command center.
+Arrow keys always work for navigation regardless of configuration. In sidebar mode, press `Ctrl+Space` to toggle focus back to the nav pane at any time. When using a remote session in a dedicated terminal, detach with `Ctrl-b d` (standard tmux detach) to return to CCC.
 
 ### Git Diff View
 
@@ -292,6 +304,8 @@ list instead of typing a full path.
 | `defaultClaudeConfigDir`  | ``                      | Fallback `CLAUDE_CONFIG_DIR` when no route matches                |
 | `remoteHosts`             | `[]`                    | SSH remote machines for running sessions (see below)              |
 | `prReviewLanguage`        | `"en"`                  | Language for PR review prompts (`"en"` or `"sv"`)                 |
+| `focusKeybinding`         | `"C-Space"`             | Tmux keybinding for toggling focus between nav and session pane   |
+| `mouseEnabled`            | `true`                  | Enable mouse click to switch focus between panes                  |
 
 The config file is created automatically on first run. Tilde (`~`) paths are expanded automatically.
 
@@ -382,8 +396,7 @@ seconds of the host reconnecting — no manual refresh needed.
 
 **Attaching to a remote session:**
 
-Press `Enter` on a remote session to open a full `ssh + tmux attach` terminal. To detach and return to CCC, press the
-tmux prefix followed by `d` (default: `Ctrl-b d`).
+Press `Enter` on a remote session to embed it in the sidebar's right pane. For a dedicated full-terminal view, CCC opens a `ssh + tmux attach` terminal. To detach and return to CCC, press the tmux prefix followed by `d` (default: `Ctrl-b d`).
 
 When creating a session, CCC matches the working directory against `claudeConfigRoutes` (first match wins) and sets
 `CLAUDE_CONFIG_DIR` accordingly. If no route matches, `defaultClaudeConfigDir` is used. If that's also empty, the
@@ -431,6 +444,8 @@ Each override supports three optional fields:
 | `send-text`      | `S`         | send          | Yes         |
 | `attach`         | `Enter`     | attach        | Yes         |
 | `new-session`    | `n`         | new           | Yes         |
+| `new-session-bg` | `C`         | new (bg)      | Yes         |
+| `toggle-focus`   | `Ctrl+Space` | focus        | Yes         |
 | `new-group`      | `g`         | group         | Yes         |
 | `open-folder`    | `f`         | folder        | Yes         |
 | `open-ide`       | `i`         | ide           | Yes         |
