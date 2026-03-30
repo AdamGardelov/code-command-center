@@ -42,7 +42,64 @@ public class TmuxBackend : ISessionBackend
         foreach (var session in sessions)
             GitService.DetectGitInfo(session);
 
-        return sessions.OrderBy(s => s.Created).ThenBy(s => s.Name).ToList();
+        // Filter out internal CCC sessions
+        sessions.RemoveAll(s => s.Name is "ccc-pool" or "ccc-manager" or "ccc-grid");
+
+        // Add pool sessions (pool takes precedence over standalone with same name)
+        var poolSessions = ListPoolSessions();
+        var poolNames = new HashSet<string>(poolSessions.Select(s => s.Name));
+        sessions.RemoveAll(s => poolNames.Contains(s.Name));
+        sessions.AddRange(poolSessions);
+
+        // Re-sort
+        sessions.Sort((a, b) =>
+        {
+            var created = Nullable.Compare(a.Created, b.Created);
+            return created != 0 ? created : string.Compare(a.Name, b.Name, StringComparison.Ordinal);
+        });
+
+        return sessions;
+    }
+
+    private List<Session> ListPoolSessions()
+    {
+        var sessions = new List<Session>();
+
+        var (poolExists, _) = RunTmuxWithError("has-session", "-t", $"={PoolSession}");
+        if (!poolExists) return sessions;
+
+        var output = RunTmux("list-windows", "-t", PoolSession,
+            "-F", "#{window_name}\t#{window_activity}\t#{pane_current_path}\t#{pane_dead}");
+
+        if (output == null) return sessions;
+
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = line.Split('\t');
+            if (parts.Length < 4) continue;
+            if (parts[0] == "placeholder") continue;
+
+            var name = parts[0];
+            var activityEpoch = long.TryParse(parts[1], out var epoch) ? epoch : 0;
+            var currentPath = parts[2];
+            var isDead = parts[3] == "1";
+
+            var session = new Session
+            {
+                Name = name,
+                CurrentPath = currentPath,
+                IsDead = isDead,
+                Created = DateTimeOffset.FromUnixTimeSeconds(activityEpoch).DateTime,
+                IsAttached = false,
+                WindowCount = 1,
+                IsPoolSession = true,
+            };
+
+            GitService.DetectGitInfo(session);
+            sessions.Add(session);
+        }
+
+        return sessions;
     }
 
     public string? CreateSession(string name, string workingDirectory, string? claudeConfigDir = null, string? remoteHost = null, bool dangerouslySkipPermissions = false, string? initialPrompt = null, bool shellOnly = false)

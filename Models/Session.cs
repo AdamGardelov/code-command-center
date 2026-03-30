@@ -21,4 +21,5 @@ public class Session
     public string? RemoteHostName { get; set; }
     public bool SkipPermissions { get; set; }
     public bool IsOffline { get; set; }
+    public bool IsPoolSession { get; set; }
 }
