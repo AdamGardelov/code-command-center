@@ -239,6 +239,36 @@ public class BackendRouter(ISessionBackend local, Dictionary<string, RemoteTmuxB
     public bool IsInsideHost() => local.IsInsideHost();
     public bool HasClaude() => local.HasClaude();
 
+    // Pool model — sidebar mode (local only)
+    public Task SetupPool() => local.SetupPool();
+
+    public Task CreateSessionInPool(string name, string dir, string? claudeConfigDir = null,
+        bool dangerouslySkipPermissions = false, string? initialPrompt = null,
+        bool shellOnly = false)
+        => local.CreateSessionInPool(name, dir, claudeConfigDir,
+            dangerouslySkipPermissions, initialPrompt, shellOnly);
+
+    public Task SetupManagerSession(string executablePath, string focusKeybinding = "C-Space",
+        bool mouseEnabled = true)
+        => local.SetupManagerSession(executablePath, focusKeybinding, mouseEnabled);
+
+    public void AttachManagerSession() => local.AttachManagerSession();
+    public bool IsInsideManager() => local.IsInsideManager();
+    public bool ManagerSessionExists() => local.ManagerSessionExists();
+
+    public Task EmbedSession(string sessionName) => local.EmbedSession(sessionName);
+    public Task UnembedSession(string sessionName) => local.UnembedSession(sessionName);
+    public Task SwapEmbeddedSession(string oldName, string newName)
+        => local.SwapEmbeddedSession(oldName, newName);
+    public string? GetEmbeddedSessionName() => local.GetEmbeddedSessionName();
+
+    public Task EmbedGridSessions(List<string> sessionNames)
+        => local.EmbedGridSessions(sessionNames);
+    public Task RestoreGridToSingleEmbed() => local.RestoreGridToSingleEmbed();
+
+    public Task MigrateStandaloneSessionsToPool(List<Session> standaloneSessions)
+        => local.MigrateStandaloneSessionsToPool(standaloneSessions);
+
     public void Dispose()
     {
         local.Dispose();
