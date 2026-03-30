@@ -249,6 +249,13 @@ public class SessionHandler(
         var confirm = Console.ReadKey(true);
         if (confirm.Key == ConsoleKey.Y)
         {
+            // Unembed if this session is currently embedded
+            if (state.EmbeddedSessionName == session.Name)
+            {
+                backend.UnembedSession(session.Name).GetAwaiter().GetResult();
+                state.SetEmbedded(null);
+            }
+
             var killError = backend.KillSession(session.Name);
             if (killError == null)
             {
@@ -266,6 +273,17 @@ public class SessionHandler(
             }
 
             loadSessions();
+
+            // Auto-embed next available session
+            if (state.EmbeddedSessionName == null)
+            {
+                var nextSession = state.Sessions.FirstOrDefault(s => s.IsPoolSession && !s.IsDead);
+                if (nextSession != null)
+                {
+                    backend.EmbedSession(nextSession.Name).GetAwaiter().GetResult();
+                    state.SetEmbedded(nextSession.Name);
+                }
+            }
         }
         else
         {
