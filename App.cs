@@ -116,6 +116,14 @@ public class App(ISessionBackend backend, CccConfig config, string executablePat
         _lastSessionLoad = DateTime.UtcNow;
         _updateCheck = UpdateChecker.CheckForUpdateAsync();
 
+        // Migrate standalone sessions to pool on first run
+        var standaloneSessions = _state.Sessions.Where(s => !s.IsPoolSession && s.RemoteHostName == null).ToList();
+        if (standaloneSessions.Count > 0)
+        {
+            backend.MigrateStandaloneSessionsToPool(standaloneSessions).GetAwaiter().GetResult();
+            LoadSessions();
+        }
+
         // Auto-embed first local session if available
         var localSessions = _state.Sessions.Where(s => s.IsPoolSession && !s.IsDead).ToList();
         if (localSessions.Count > 0)

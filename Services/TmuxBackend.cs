@@ -453,6 +453,34 @@ public class TmuxBackend : ISessionBackend
         await Task.CompletedTask;
     }
 
+    public async Task MigrateStandaloneSessionsToPool(List<Session> standaloneSessions)
+    {
+        await SetupPool();
+
+        foreach (var session in standaloneSessions)
+        {
+            if (session.IsPoolSession) continue;
+            if (session.Name is "ccc-pool" or "ccc-manager" or "ccc-grid") continue;
+            if (session.RemoteHostName != null) continue;
+
+            // Move the standalone session's window into the pool
+            var (success, _) = RunTmuxWithError("move-window",
+                "-s", $"{session.Name}:0",
+                "-t", $"{PoolSession}:");
+
+            if (success)
+            {
+                // Rename the window to match the session name
+                RunTmux("rename-window", "-t", $"{PoolSession}:{{last}}", session.Name);
+                // Kill the now-empty standalone session
+                RunTmux("kill-session", "-t", $"={session.Name}");
+            }
+        }
+
+        // Clean up placeholder if real sessions were imported
+        RunTmux("kill-window", "-t", $"{PoolSession}:placeholder");
+    }
+
     public async Task CreateSessionInPool(string name, string dir, string? claudeConfigDir = null,
         bool dangerouslySkipPermissions = false, string? initialPrompt = null,
         bool shellOnly = false)
